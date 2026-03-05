@@ -33,7 +33,8 @@ jobs:
           git fetch upstream main
           git fetch origin main
 
-          git checkout -B sync/upstream-main origin/main
+          git checkout -B main origin/main
+          git reset --hard origin/main
 
           if git merge --no-ff --no-edit upstream/main; then
             if git diff --quiet origin/main...HEAD; then
