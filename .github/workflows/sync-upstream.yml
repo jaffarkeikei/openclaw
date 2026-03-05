@@ -48,7 +48,9 @@ jobs:
           fi
 
       - name: Create sync pull request
+        id: create_pr
         if: steps.merge.outputs.has_changes == 'true'
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v7
         with:
           branch: sync/upstream-main
@@ -63,6 +65,12 @@ jobs:
             - Target: `jaffarkeikei/openclaw@main`
 
             Please run smoke tests before merge.
+
+      - name: Warn when PR creation is blocked by repo settings
+        if: steps.merge.outputs.has_changes == 'true' && steps.create_pr.outcome == 'failure'
+        run: |
+          echo "::warning::Branch sync/upstream-main was pushed, but PR creation failed."
+          echo "::warning::Enable repository setting: Actions -> General -> Workflow permissions -> Allow GitHub Actions to create and approve pull requests."
 
       - name: Fail when merge conflict needs manual resolution
         if: steps.merge.outputs.merge_conflict == 'true'
