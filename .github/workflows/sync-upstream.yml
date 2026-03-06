@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   sync-upstream:
@@ -24,7 +23,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Merge upstream main into sync branch
+      - name: Merge upstream main into fork main
         id: merge
         run: |
           set -euo pipefail
@@ -58,30 +57,15 @@ jobs:
             git merge --abort || true
           fi
 
-      - name: Create sync pull request
-        id: create_pr
+      - name: Push direct sync to fork main
         if: steps.merge.outputs.has_changes == 'true'
-        continue-on-error: true
-        uses: peter-evans/create-pull-request@v7
-        with:
-          branch: sync/upstream-main
-          base: main
-          delete-branch: false
-          title: "chore: sync upstream openclaw/main"
-          commit-message: "chore: sync upstream openclaw/main"
-          body: |
-            Automated upstream sync PR.
-
-            - Source: `openclaw/openclaw@main`
-            - Target: `jaffarkeikei/openclaw@main`
-
-            Please run smoke tests before merge.
-
-      - name: Warn when PR creation is blocked by repo settings
-        if: steps.merge.outputs.has_changes == 'true' && steps.create_pr.outcome == 'failure'
         run: |
-          echo "::warning::Branch sync/upstream-main was pushed, but PR creation failed."
-          echo "::warning::Check repo settings for GitHub Actions PR creation. If sync still fails, inspect whether protected files or branch rules blocked the push."
+          git push origin HEAD:main
+
+      - name: Report no-op sync
+        if: steps.merge.outputs.has_changes != 'true' && steps.merge.outputs.merge_conflict != 'true'
+        run: |
+          echo "No upstream changes to sync."
 
       - name: Fail when merge conflict needs manual resolution
         if: steps.merge.outputs.merge_conflict == 'true'

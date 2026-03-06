@@ -17,6 +17,14 @@ Verify:
 git remote -v
 ```
 
+## Sync Model
+
+This fork now acts as a **direct-sync mirror layer** for Anza.
+
+- Upstream changes sync directly into `jaffarkeikei/openclaw@main`
+- Review happens in the **Anza** repository when the OpenClaw pin changes
+- There is **no review PR inside the fork** as part of the normal automated flow
+
 ## Normal Update Flow (weekly)
 
 1. Fetch latest upstream:
@@ -38,12 +46,9 @@ git remote -v
    git push origin main
    ```
 
-4. Merge updated `main` into product branches:
-
-   ```bash
-   git checkout <feature-or-product-branch>
-   git merge main
-   ```
+4. Let Anza consume the new fork SHA through its own pin-bump PR:
+   - `anza/.github/workflows/openclaw-version-bump.yml`
+   - `anza/ops/openclaw-version.json`
 
 ## Emergency Security Update Flow
 
@@ -56,6 +61,11 @@ Use this path when upstream publishes a high-priority fix:
 
 ## GitHub Actions Automation
 
-The workflow at `.github/workflows/sync-upstream.yml` creates a PR from upstream updates into this fork's `main` branch on a schedule and via manual trigger.
+The workflow at `.github/workflows/sync-upstream.yml` now syncs upstream updates directly into this fork's `main` branch on a schedule and via manual trigger.
+
+Notes:
+
+- The workflow preserves this fork's own `.github/workflows` directory when upstream changes touch workflow files. This avoids GitHub token restrictions when pushing workflow-file updates from automation.
+- As a result, this fork is intended to track the **runtime/codebase** closely for Anza, but it is not a byte-for-byte mirror of upstream workflow automation files.
 
 If merge conflicts occur, resolve them manually using this runbook.
