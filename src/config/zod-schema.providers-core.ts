@@ -225,6 +225,7 @@ export const TelegramAccountSchemaBase = z
       .object({
         reactions: z.boolean().optional(),
         sendMessage: z.boolean().optional(),
+        poll: z.boolean().optional(),
         deleteMessage: z.boolean().optional(),
         sticker: z.boolean().optional(),
       })
@@ -528,6 +529,12 @@ export const DiscordAccountSchema = z
       .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)])
       .optional(),
     activityUrl: z.string().url().optional(),
+    inboundWorker: z
+      .object({
+        runTimeoutMs: z.number().int().nonnegative().optional(),
+      })
+      .strict()
+      .optional(),
     eventQueue: z
       .object({
         listenerTimeout: z.number().int().positive().optional(),
