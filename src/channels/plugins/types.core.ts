@@ -12,7 +12,9 @@ export type ChannelId = ChatChannelId | (string & {});
 
 export type ChannelOutboundTargetMode = "explicit" | "implicit" | "heartbeat";
 
-export type ChannelAgentTool = AgentTool<TSchema, unknown>;
+export type ChannelAgentTool = AgentTool<TSchema, unknown> & {
+  ownerOnly?: boolean;
+};
 
 export type ChannelAgentToolFactory = (params: { cfg?: OpenClawConfig }) => ChannelAgentTool[];
 
@@ -118,6 +120,9 @@ export type ChannelAccountSnapshot = {
   lastStopAt?: number | null;
   lastInboundAt?: number | null;
   lastOutboundAt?: number | null;
+  busy?: boolean;
+  activeRuns?: number;
+  lastRunActivityAt?: number | null;
   mode?: string;
   dmPolicy?: string;
   allowFrom?: string[];
@@ -223,6 +228,16 @@ export type ChannelThreadingAdapter = {
     accountId?: string | null;
     chatType?: string | null;
   }) => "off" | "first" | "all";
+  /**
+   * When replyToMode is "off", allow explicit reply tags/directives to keep replyToId.
+   *
+   * Default in shared reply flow: true for known providers; per-channel opt-out supported.
+   */
+  allowExplicitReplyTagsWhenOff?: boolean;
+  /**
+   * Deprecated alias for allowExplicitReplyTagsWhenOff.
+   * Kept for compatibility with older extensions/docks.
+   */
   allowTagsWhenOff?: boolean;
   buildToolContext?: (params: {
     cfg: OpenClawConfig;
@@ -237,6 +252,7 @@ export type ChannelThreadingContext = {
   From?: string;
   To?: string;
   ChatType?: string;
+  CurrentMessageId?: string | number;
   ReplyToId?: string;
   ReplyToIdFull?: string;
   ThreadLabel?: string;
@@ -247,6 +263,7 @@ export type ChannelThreadingToolContext = {
   currentChannelId?: string;
   currentChannelProvider?: ChannelId;
   currentThreadTs?: string;
+  currentMessageId?: string | number;
   replyToMode?: "off" | "first" | "all";
   hasRepliedRef?: { value: boolean };
   /**
@@ -293,7 +310,13 @@ export type ChannelMessageActionContext = {
   action: ChannelMessageActionName;
   cfg: OpenClawConfig;
   params: Record<string, unknown>;
+  mediaLocalRoots?: readonly string[];
   accountId?: string | null;
+  /**
+   * Trusted sender id from inbound context. This is server-injected and must
+   * never be sourced from tool/model-controlled params.
+   */
+  requesterSenderId?: string | null;
   gateway?: {
     url?: string;
     token?: string;
@@ -309,6 +332,7 @@ export type ChannelMessageActionContext = {
 export type ChannelToolSend = {
   to: string;
   accountId?: string | null;
+  threadId?: string | null;
 };
 
 export type ChannelMessageActionAdapter = {
@@ -334,4 +358,18 @@ export type ChannelPollContext = {
   poll: PollInput;
   accountId?: string | null;
   threadId?: string | null;
+  silent?: boolean;
+  isAnonymous?: boolean;
+};
+
+/** Minimal base for all channel probe results. Channel-specific probes extend this. */
+export type BaseProbeResult<TError = string | null> = {
+  ok: boolean;
+  error?: TError;
+};
+
+/** Minimal base for token resolution results. */
+export type BaseTokenResolution = {
+  token: string;
+  source: string;
 };
