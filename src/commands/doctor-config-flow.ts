@@ -1,6 +1,8 @@
+import type { ZodIssue } from "zod";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ZodIssue } from "zod";
+import type { OpenClawConfig } from "../config/config.js";
+import type { DoctorOptions } from "./doctor-prompter.js";
 import { normalizeChatChannelId } from "../channels/registry.js";
 import {
   isNumericTelegramUserId,
@@ -8,8 +10,9 @@ import {
 } from "../channels/telegram/allow-from.js";
 import { fetchTelegramChatId } from "../channels/telegram/api.js";
 import { formatCliCommand } from "../cli/command-format.js";
+import { resolveCommandSecretRefsViaGateway } from "../cli/command-secret-gateway.js";
+import { getChannelsCommandSecretTargetIds } from "../cli/command-secret-targets.js";
 import { listRouteBindings } from "../config/bindings.js";
-import type { OpenClawConfig } from "../config/config.js";
 import { CONFIG_PATH, migrateLegacyConfig, readConfigFileSnapshot } from "../config/config.js";
 import { collectProviderDangerousNameMatchingScopes } from "../config/dangerous-name-matching.js";
 import { formatConfigIssueLines } from "../config/issue-format.js";
@@ -45,11 +48,11 @@ import {
   isMattermostMutableAllowEntry,
   isSlackMutableAllowEntry,
 } from "../security/mutable-allowlist-detectors.js";
+import { inspectTelegramAccount } from "../telegram/account-inspect.js";
 import { listTelegramAccountIds, resolveTelegramAccount } from "../telegram/accounts.js";
 import { note } from "../terminal/note.js";
 import { isRecord, resolveHomeDir } from "../utils.js";
 import { normalizeCompatibilityConfigValues } from "./doctor-legacy-config.js";
-import type { DoctorOptions } from "./doctor-prompter.js";
 import { autoMigrateLegacyStateDir } from "./doctor-state-migrations.js";
 
 type UnrecognizedKeysIssue = ZodIssue & {
@@ -464,10 +467,20 @@ async function maybeRepairTelegramAllowFromUsernames(cfg: OpenClawConfig): Promi
     return { config: cfg, changes: [] };
   }
 
+  const { resolvedConfig } = await resolveCommandSecretRefsViaGateway({
+    config: cfg,
+    commandName: "doctor --fix",
+    targetIds: getChannelsCommandSecretTargetIds(),
+    mode: "summary",
+  });
+  const hasConfiguredUnavailableToken = listTelegramAccountIds(cfg).some((accountId) => {
+    const inspected = inspectTelegramAccount({ cfg, accountId });
+    return inspected.enabled && inspected.tokenStatus === "configured_unavailable";
+  });
   const tokens = Array.from(
     new Set(
-      listTelegramAccountIds(cfg)
-        .map((accountId) => resolveTelegramAccount({ cfg, accountId }))
+      listTelegramAccountIds(resolvedConfig)
+        .map((accountId) => resolveTelegramAccount({ cfg: resolvedConfig, accountId }))
         .map((account) => (account.tokenSource === "none" ? "" : account.token))
         .map((token) => token.trim())
         .filter(Boolean),
@@ -478,7 +491,9 @@ async function maybeRepairTelegramAllowFromUsernames(cfg: OpenClawConfig): Promi
     return {
       config: cfg,
       changes: [
-        `- Telegram allowFrom contains @username entries, but no Telegram bot token is configured; cannot auto-resolve (run onboarding or replace with numeric sender IDs).`,
+        hasConfiguredUnavailableToken
+          ? `- Telegram allowFrom contains @username entries, but configured Telegram bot credentials are unavailable in this command path; cannot auto-resolve (start the gateway or make the secret source available, then rerun doctor --fix).`
+          : `- Telegram allowFrom contains @username entries, but no Telegram bot token is configured; cannot auto-resolve (run onboarding or replace with numeric sender IDs).`,
       ],
     };
   }

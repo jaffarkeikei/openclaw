@@ -2,14 +2,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import type { ConfigWriteOptions } from "../config/io.js";
+import type { SecretProviderConfig } from "../config/types.secrets.js";
 import { resolveAgentConfig } from "../agents/agent-scope.js";
 import { loadAuthProfileStoreForSecretsRuntime } from "../agents/auth-profiles.js";
 import { AUTH_STORE_VERSION } from "../agents/auth-profiles/constants.js";
 import { resolveAuthStorePath } from "../agents/auth-profiles/paths.js";
 import { normalizeProviderId } from "../agents/model-selection.js";
 import { resolveStateDir, type OpenClawConfig } from "../config/config.js";
-import type { ConfigWriteOptions } from "../config/io.js";
-import type { SecretProviderConfig } from "../config/types.secrets.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { resolveConfigDir, resolveUserPath } from "../utils.js";
 import { iterateAuthProfileCredentials } from "./auth-profiles-scan.js";
@@ -298,7 +298,8 @@ function applyConfigTargetMutations(params: {
     }
 
     const targetPathSegments = resolved.pathSegments;
-    if (resolved.entry.secretShape === "sibling_ref") {
+    const usesSiblingRef = resolved.entry.secretShape === "sibling_ref"; // pragma: allowlist secret
+    if (usesSiblingRef) {
       const previous = getPath(params.nextConfig, targetPathSegments);
       if (isNonEmptyString(previous)) {
         scrubbedValues.add(previous.trim());
@@ -530,7 +531,8 @@ function applyAuthProfileTargetMutation(params: {
     store,
   });
   const targetPathSegments = params.resolved.pathSegments;
-  if (params.resolved.entry.secretShape === "sibling_ref") {
+  const usesSiblingRef = params.resolved.entry.secretShape === "sibling_ref"; // pragma: allowlist secret
+  if (usesSiblingRef) {
     const previous = getPath(store, targetPathSegments);
     if (isNonEmptyString(previous)) {
       params.scrubbedValues.add(previous.trim());

@@ -1,3 +1,5 @@
+import type { GatewayService } from "../daemon/service.js";
+import type { RuntimeEnv } from "../runtime.js";
 import { buildWorkspaceSkillStatus } from "../agents/skills-status.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import { resolveCommandSecretRefsViaGateway } from "../cli/command-secret-gateway.js";
@@ -6,7 +8,6 @@ import { withProgress } from "../cli/progress.js";
 import { loadConfig, readConfigFileSnapshot, resolveGatewayPort } from "../config/config.js";
 import { readLastGatewayErrorLine } from "../daemon/diagnostics.js";
 import { resolveNodeService } from "../daemon/node-service.js";
-import type { GatewayService } from "../daemon/service.js";
 import { resolveGatewayService } from "../daemon/service.js";
 import { buildGatewayConnectionDetails, callGateway } from "../gateway/call.js";
 import { normalizeControlUiBasePath } from "../gateway/control-ui-shared.js";
@@ -22,7 +23,6 @@ import { readTailscaleStatusJson } from "../infra/tailscale.js";
 import { normalizeUpdateChannel, resolveUpdateChannelDisplay } from "../infra/update-channels.js";
 import { checkUpdateStatus, formatGitInstallLabel } from "../infra/update-check.js";
 import { runExec } from "../process/exec.js";
-import type { RuntimeEnv } from "../runtime.js";
 import { VERSION } from "../version.js";
 import { resolveControlUiLinks } from "./onboard-helpers.js";
 import { getAgentLocalStatuses } from "./status-all/agents.js";
@@ -43,6 +43,7 @@ export async function statusAllCommand(
       config: loadedRaw,
       commandName: "status --all",
       targetIds: getStatusCommandSecretTargetIds(),
+      mode: "summary",
     });
     const osSummary = resolveOsSummary();
     const snap = await readConfigFileSnapshot().catch(() => null);
@@ -159,7 +160,10 @@ export async function statusAllCommand(
     const agentStatus = await getAgentLocalStatuses(cfg);
     progress.tick();
     progress.setLabel("Summarizing channels…");
-    const channels = await buildChannelsTable(cfg, { showSecrets: false });
+    const channels = await buildChannelsTable(cfg, {
+      showSecrets: false,
+      sourceConfig: loadedRaw,
+    });
     progress.tick();
 
     const connectionDetailsForReport = (() => {

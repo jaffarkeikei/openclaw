@@ -1,3 +1,5 @@
+import type { TlsOptions } from "node:tls";
+import type { WebSocketServer } from "ws";
 import {
   createServer as createHttpServer,
   type Server as HttpServer,
@@ -5,13 +7,13 @@ import {
   type ServerResponse,
 } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
-import type { TlsOptions } from "node:tls";
-import type { WebSocketServer } from "ws";
+import type { CanvasHostHandler } from "../canvas-host/server.js";
+import type { createSubsystemLogger } from "../logging/subsystem.js";
+import type { ReadinessChecker } from "./server/readiness.js";
+import type { GatewayWsClient } from "./server/ws-types.js";
 import { resolveAgentAvatar } from "../agents/identity-avatar.js";
 import { CANVAS_WS_PATH, handleA2uiHttpRequest } from "../canvas-host/a2ui.js";
-import type { CanvasHostHandler } from "../canvas-host/server.js";
 import { loadConfig } from "../config/config.js";
-import type { createSubsystemLogger } from "../logging/subsystem.js";
 import { safeEqualSecret } from "../security/secret-equal.js";
 import { handleSlackHttpRequest } from "../slack/http/index.js";
 import {
@@ -20,7 +22,12 @@ import {
   normalizeRateLimitClientIp,
   type AuthRateLimiter,
 } from "./auth-rate-limit.js";
-import { type GatewayAuthResult, type ResolvedGatewayAuth } from "./auth.js";
+import {
+  authorizeHttpGatewayConnect,
+  isLocalDirectRequest,
+  type GatewayAuthResult,
+  type ResolvedGatewayAuth,
+} from "./auth.js";
 import { normalizeCanvasScopedUrl } from "./canvas-capability.js";
 import {
   handleControlUiAvatarRequest,
@@ -46,6 +53,7 @@ import {
   resolveHookDeliver,
 } from "./hooks.js";
 import { sendGatewayAuthFailure, setDefaultSecurityHeaders } from "./http-common.js";
+import { getBearerToken } from "./http-utils.js";
 import { handleOpenAiHttpRequest } from "./openai-http.js";
 import { handleOpenResponsesHttpRequest } from "./openresponses-http.js";
 import {
@@ -59,7 +67,6 @@ import {
   type PluginHttpRequestHandler,
   type PluginRoutePathContext,
 } from "./server/plugins-http.js";
-import type { GatewayWsClient } from "./server/ws-types.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
@@ -150,11 +157,39 @@ function shouldEnforceDefaultPluginGatewayAuth(pathContext: PluginRoutePathConte
   );
 }
 
-function handleGatewayProbeRequest(
+async function canRevealReadinessDetails(params: {
+  req: IncomingMessage;
+  resolvedAuth: ResolvedGatewayAuth;
+  trustedProxies: string[];
+  allowRealIpFallback: boolean;
+}): Promise<boolean> {
+  if (isLocalDirectRequest(params.req, params.trustedProxies, params.allowRealIpFallback)) {
+    return true;
+  }
+  if (params.resolvedAuth.mode === "none") {
+    return false;
+  }
+
+  const bearerToken = getBearerToken(params.req);
+  const authResult = await authorizeHttpGatewayConnect({
+    auth: params.resolvedAuth,
+    connectAuth: bearerToken ? { token: bearerToken, password: bearerToken } : null,
+    req: params.req,
+    trustedProxies: params.trustedProxies,
+    allowRealIpFallback: params.allowRealIpFallback,
+  });
+  return authResult.ok;
+}
+
+async function handleGatewayProbeRequest(
   req: IncomingMessage,
   res: ServerResponse,
   requestPath: string,
-): boolean {
+  resolvedAuth: ResolvedGatewayAuth,
+  trustedProxies: string[],
+  allowRealIpFallback: boolean,
+  getReadiness?: ReadinessChecker,
+): Promise<boolean> {
   const status = GATEWAY_PROBE_STATUS_BY_PATH.get(requestPath);
   if (!status) {
     return false;
@@ -169,14 +204,34 @@ function handleGatewayProbeRequest(
     return true;
   }
 
-  res.statusCode = 200;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  if (method === "HEAD") {
-    res.end();
-    return true;
+
+  let statusCode: number;
+  let body: string;
+  if (status === "ready" && getReadiness) {
+    const includeDetails = await canRevealReadinessDetails({
+      req,
+      resolvedAuth,
+      trustedProxies,
+      allowRealIpFallback,
+    });
+    try {
+      const result = getReadiness();
+      statusCode = result.ready ? 200 : 503;
+      body = JSON.stringify(includeDetails ? result : { ready: result.ready });
+    } catch {
+      statusCode = 503;
+      body = JSON.stringify(
+        includeDetails ? { ready: false, failing: ["internal"], uptimeMs: 0 } : { ready: false },
+      );
+    }
+  } else {
+    statusCode = 200;
+    body = JSON.stringify({ ok: true, status });
   }
-  res.end(JSON.stringify({ ok: true, status }));
+  res.statusCode = statusCode;
+  res.end(method === "HEAD" ? undefined : body);
   return true;
 }
 
@@ -509,6 +564,7 @@ export function createGatewayHttpServer(opts: {
   controlUiBasePath: string;
   controlUiRoot?: ControlUiRootState;
   openAiChatCompletionsEnabled: boolean;
+  openAiChatCompletionsConfig?: import("../config/types.gateway.js").GatewayHttpChatCompletionsConfig;
   openResponsesEnabled: boolean;
   openResponsesConfig?: import("../config/types.gateway.js").GatewayHttpResponsesConfig;
   strictTransportSecurityHeader?: string;
@@ -518,6 +574,7 @@ export function createGatewayHttpServer(opts: {
   resolvedAuth: ResolvedGatewayAuth;
   /** Optional rate limiter for auth brute-force protection. */
   rateLimiter?: AuthRateLimiter;
+  getReadiness?: ReadinessChecker;
   tlsOptions?: TlsOptions;
 }): HttpServer {
   const {
@@ -527,6 +584,7 @@ export function createGatewayHttpServer(opts: {
     controlUiBasePath,
     controlUiRoot,
     openAiChatCompletionsEnabled,
+    openAiChatCompletionsConfig,
     openResponsesEnabled,
     openResponsesConfig,
     strictTransportSecurityHeader,
@@ -535,6 +593,7 @@ export function createGatewayHttpServer(opts: {
     shouldEnforcePluginGatewayAuth,
     resolvedAuth,
     rateLimiter,
+    getReadiness,
   } = opts;
   const httpServer: HttpServer = opts.tlsOptions
     ? createHttpsServer(opts.tlsOptions, (req, res) => {
@@ -610,6 +669,7 @@ export function createGatewayHttpServer(opts: {
           run: () =>
             handleOpenAiHttpRequest(req, res, {
               auth: resolvedAuth,
+              config: openAiChatCompletionsConfig,
               trustedProxies,
               allowRealIpFallback,
               rateLimiter,
@@ -690,7 +750,16 @@ export function createGatewayHttpServer(opts: {
 
       requestStages.push({
         name: "gateway-probes",
-        run: () => handleGatewayProbeRequest(req, res, requestPath),
+        run: () =>
+          handleGatewayProbeRequest(
+            req,
+            res,
+            requestPath,
+            resolvedAuth,
+            trustedProxies,
+            allowRealIpFallback,
+            getReadiness,
+          ),
       });
 
       if (await runGatewayHttpRequestStages(requestStages)) {

@@ -1,3 +1,4 @@
+import type { RESTAPIPoll } from "discord-api-types/rest/v10";
 import {
   Embed,
   RequestClient,
@@ -7,11 +8,10 @@ import {
   type TopLevelComponents,
 } from "@buape/carbon";
 import { PollLayoutType } from "discord-api-types/payloads/v10";
-import type { RESTAPIPoll } from "discord-api-types/rest/v10";
 import { Routes, type APIChannel, type APIEmbed } from "discord-api-types/v10";
 import type { ChunkMode } from "../auto-reply/chunk.js";
-import { loadConfig, type OpenClawConfig } from "../config/config.js";
 import type { RetryRunner } from "../infra/retry-policy.js";
+import { loadConfig, type OpenClawConfig } from "../config/config.js";
 import { buildOutboundMediaLoadOptions } from "../media/load-options.js";
 import { normalizePollDurationHours, normalizePollInput, type PollInput } from "../polls.js";
 import { loadWebMedia } from "../web/media.js";
@@ -415,6 +415,7 @@ async function sendDiscordMedia(
   text: string,
   mediaUrl: string,
   mediaLocalRoots: readonly string[] | undefined,
+  maxBytes: number | undefined,
   replyTo: string | undefined,
   request: DiscordRequest,
   maxLinesPerMessage?: number,
@@ -423,7 +424,10 @@ async function sendDiscordMedia(
   chunkMode?: ChunkMode,
   silent?: boolean,
 ) {
-  const media = await loadWebMedia(mediaUrl, buildOutboundMediaLoadOptions({ mediaLocalRoots }));
+  const media = await loadWebMedia(
+    mediaUrl,
+    buildOutboundMediaLoadOptions({ maxBytes, mediaLocalRoots }),
+  );
   const chunks = text ? buildDiscordTextChunks(text, { maxLinesPerMessage, chunkMode }) : [];
   const caption = chunks[0] ?? "";
   const messageReference = replyTo ? { message_id: replyTo, fail_if_not_exists: false } : undefined;

@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonActionResponse } from "./response.js";
+import { captureFullEnv } from "../../test-utils/env.js";
 
 const loadConfigMock = vi.hoisted(() => vi.fn());
 const readConfigFileSnapshotMock = vi.hoisted(() => vi.fn());
@@ -118,6 +119,7 @@ vi.mock("../../runtime.js", () => ({
 }));
 
 const { runDaemonInstall } = await import("./install.js");
+const envSnapshot = captureFullEnv();
 
 describe("runDaemonInstall", () => {
   beforeEach(() => {
@@ -162,6 +164,12 @@ describe("runDaemonInstall", () => {
     isGatewayDaemonRuntimeMock.mockReturnValue(true);
     installDaemonServiceAndEmitMock.mockResolvedValue(undefined);
     service.isLoaded.mockResolvedValue(false);
+    delete process.env.OPENCLAW_GATEWAY_TOKEN;
+    delete process.env.CLAWDBOT_GATEWAY_TOKEN;
+  });
+
+  afterEach(() => {
+    envSnapshot.restore();
   });
 
   it("fails install when token auth requires an unresolved token SecretRef", async () => {

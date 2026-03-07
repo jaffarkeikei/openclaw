@@ -524,6 +524,13 @@ curl "https://api.telegram.org/bot<bot_token>/getUpdates"
 
     This is currently scoped to forum topics in groups and supergroups.
 
+    **Thread-bound ACP spawn from chat**:
+
+    - `/acp spawn <agent> --thread here|auto` can bind the current Telegram topic to a new ACP session.
+    - Follow-up topic messages route to the bound ACP session directly (no `/acp steer` required).
+    - OpenClaw pins the spawn confirmation message in-topic after a successful bind.
+    - Requires `channels.telegram.threadBindings.spawnAcpSessions=true`.
+
     Template context includes:
 
     - `MessageThreadId`
@@ -717,7 +724,7 @@ curl "https://api.telegram.org/bot<bot_token>/getUpdates"
   <Accordion title="Limits, retry, and CLI targets">
     - `channels.telegram.textChunkLimit` default is 4000.
     - `channels.telegram.chunkMode="newline"` prefers paragraph boundaries (blank lines) before length splitting.
-    - `channels.telegram.mediaMaxMb` (default 5) caps inbound Telegram media download/processing size.
+    - `channels.telegram.mediaMaxMb` (default 100) caps inbound and outbound Telegram media size.
     - `channels.telegram.timeoutSeconds` overrides Telegram API client timeout (if unset, grammY default applies).
     - group context history uses `channels.telegram.historyLimit` or `messages.groupChat.historyLimit` (default 50); `0` disables.
     - DM history controls:
@@ -797,7 +804,7 @@ openclaw message poll --channel telegram --target -1001234567890:topic:42 \
 ```yaml
 channels:
   telegram:
-    proxy: socks5://user:pass@proxy-host:1080
+    proxy: socks5://<user>:<password>@proxy-host:1080
 ```
 
     - Node 22+ defaults to `autoSelectFamily=true` (except WSL2) and `dnsResultOrder=ipv4first`.
@@ -866,7 +873,7 @@ Primary reference:
 - `channels.telegram.chunkMode`: `length` (default) or `newline` to split on blank lines (paragraph boundaries) before length chunking.
 - `channels.telegram.linkPreview`: toggle link previews for outbound messages (default: true).
 - `channels.telegram.streaming`: `off | partial | block | progress` (live stream preview; default: `partial`; `progress` maps to `partial`; `block` is legacy preview mode compatibility). In DMs, `partial` uses native `sendMessageDraft` when available.
-- `channels.telegram.mediaMaxMb`: inbound Telegram media download/processing cap (MB).
+- `channels.telegram.mediaMaxMb`: inbound/outbound Telegram media cap (MB, default: 100).
 - `channels.telegram.retry`: retry policy for Telegram send helpers (CLI/tools/actions) on recoverable outbound API errors (attempts, minDelayMs, maxDelayMs, jitter).
 - `channels.telegram.network.autoSelectFamily`: override Node autoSelectFamily (true=enable, false=disable). Defaults to enabled on Node 22+, with WSL2 defaulting to disabled.
 - `channels.telegram.network.dnsResultOrder`: override DNS result order (`ipv4first` or `verbatim`). Defaults to `ipv4first` on Node 22+.

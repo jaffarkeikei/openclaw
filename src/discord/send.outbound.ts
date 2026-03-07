@@ -1,19 +1,20 @@
+import { serializePayload, type MessagePayloadObject, type RequestClient } from "@buape/carbon";
+import { ChannelType, Routes } from "discord-api-types/v10";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { serializePayload, type MessagePayloadObject, type RequestClient } from "@buape/carbon";
-import { ChannelType, Routes } from "discord-api-types/v10";
+import type { RetryConfig } from "../infra/retry.js";
+import type { PollInput } from "../polls.js";
+import type { DiscordSendResult } from "./send.types.js";
 import { resolveChunkMode } from "../auto-reply/chunk.js";
 import { loadConfig, type OpenClawConfig } from "../config/config.js";
 import { resolveMarkdownTableMode } from "../config/markdown-tables.js";
 import { recordChannelActivity } from "../infra/channel-activity.js";
-import type { RetryConfig } from "../infra/retry.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
 import { maxBytesForKind } from "../media/constants.js";
 import { extensionForMime } from "../media/mime.js";
 import { unlinkIfExists } from "../media/temp-files.js";
-import type { PollInput } from "../polls.js";
 import { loadWebMediaRaw } from "../web/media.js";
 import { resolveDiscordAccount } from "./accounts.js";
 import { rewriteDiscordKnownMentions } from "./mentions.js";
@@ -36,7 +37,6 @@ import {
   type DiscordSendComponents,
   type DiscordSendEmbeds,
 } from "./send.shared.js";
-import type { DiscordSendResult } from "./send.types.js";
 import {
   ensureOggOpus,
   getVoiceMessageMetadata,
@@ -145,6 +145,10 @@ export async function sendMessageDiscord(
     accountId: accountInfo.accountId,
   });
   const chunkMode = resolveChunkMode(cfg, "discord", accountInfo.accountId);
+  const mediaMaxBytes =
+    typeof accountInfo.config.mediaMaxMb === "number"
+      ? accountInfo.config.mediaMaxMb * 1024 * 1024
+      : 8 * 1024 * 1024;
   const textWithTables = convertMarkdownTables(text ?? "", tableMode);
   const textWithMentions = rewriteDiscordKnownMentions(textWithTables, {
     accountId: accountInfo.accountId,
@@ -211,6 +215,7 @@ export async function sendMessageDiscord(
           mediaCaption ?? "",
           opts.mediaUrl,
           opts.mediaLocalRoots,
+          mediaMaxBytes,
           undefined,
           request,
           accountInfo.config.maxLinesPerMessage,
@@ -271,6 +276,7 @@ export async function sendMessageDiscord(
         textWithMentions,
         opts.mediaUrl,
         opts.mediaLocalRoots,
+        mediaMaxBytes,
         opts.replyTo,
         request,
         accountInfo.config.maxLinesPerMessage,

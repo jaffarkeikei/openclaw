@@ -1,16 +1,17 @@
-import { formatCliCommand } from "../../../cli/command-format.js";
 import type { OpenClawConfig } from "../../../config/config.js";
+import type { WizardPrompter } from "../../../wizard/prompts.js";
+import type { ChannelOnboardingAdapter, ChannelOnboardingDmPolicy } from "../onboarding-types.js";
+import { formatCliCommand } from "../../../cli/command-format.js";
 import { hasConfiguredSecretInput } from "../../../config/types.secrets.js";
 import { DEFAULT_ACCOUNT_ID } from "../../../routing/session-key.js";
+import { inspectTelegramAccount } from "../../../telegram/account-inspect.js";
 import {
   listTelegramAccountIds,
   resolveDefaultTelegramAccountId,
   resolveTelegramAccount,
 } from "../../../telegram/accounts.js";
 import { formatDocsLink } from "../../../terminal/links.js";
-import type { WizardPrompter } from "../../../wizard/prompts.js";
 import { fetchTelegramChatId } from "../../telegram/api.js";
-import type { ChannelOnboardingAdapter, ChannelOnboardingDmPolicy } from "../onboarding-types.js";
 import {
   applySingleTokenPromptResult,
   patchChannelConfigForAccount,
@@ -153,12 +154,8 @@ export const telegramOnboardingAdapter: ChannelOnboardingAdapter = {
   channel,
   getStatus: async ({ cfg }) => {
     const configured = listTelegramAccountIds(cfg).some((accountId) => {
-      const account = resolveTelegramAccount({ cfg, accountId });
-      return (
-        Boolean(account.token) ||
-        Boolean(account.config.tokenFile?.trim()) ||
-        hasConfiguredSecretInput(account.config.botToken)
-      );
+      const account = inspectTelegramAccount({ cfg, accountId });
+      return account.configured;
     });
     return {
       channel,

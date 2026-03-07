@@ -1,10 +1,11 @@
+import type { HeartbeatEventPayload } from "../infra/heartbeat-events.js";
+import type { RuntimeEnv } from "../runtime.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import { withProgress } from "../cli/progress.js";
-import { loadConfig, resolveGatewayPort } from "../config/config.js";
+import { resolveGatewayPort } from "../config/config.js";
 import { buildGatewayConnectionDetails, callGateway } from "../gateway/call.js";
 import { info } from "../globals.js";
 import { formatTimeAgo } from "../infra/format-time/format-relative.ts";
-import type { HeartbeatEventPayload } from "../infra/heartbeat-events.js";
 import { formatUsageReportLines, loadProviderUsageSummary } from "../infra/provider-usage.js";
 import { normalizeUpdateChannel, resolveUpdateChannelDisplay } from "../infra/update-channels.js";
 import { formatGitInstallLabel } from "../infra/update-check.js";
@@ -14,7 +15,6 @@ import {
   resolveMemoryVectorState,
   type Tone,
 } from "../memory/status-format.js";
-import type { RuntimeEnv } from "../runtime.js";
 import { runSecurityAudit } from "../security/audit.js";
 import { renderTable } from "../terminal/table.js";
 import { theme } from "../terminal/theme.js";
@@ -80,33 +80,33 @@ export async function statusCommand(
     return;
   }
 
-  const [scan, securityAudit] = opts.json
-    ? await Promise.all([
-        scanStatus({ json: opts.json, timeoutMs: opts.timeoutMs, all: opts.all }, runtime),
-        runSecurityAudit({
-          config: loadConfig(),
-          deep: false,
-          includeFilesystem: true,
-          includeChannelSecurity: true,
-        }),
-      ])
-    : [
-        await scanStatus({ json: opts.json, timeoutMs: opts.timeoutMs, all: opts.all }, runtime),
-        await withProgress(
-          {
-            label: "Running security audit…",
-            indeterminate: true,
-            enabled: true,
-          },
-          async () =>
-            await runSecurityAudit({
-              config: loadConfig(),
-              deep: false,
-              includeFilesystem: true,
-              includeChannelSecurity: true,
-            }),
-        ),
-      ];
+  const scan = await scanStatus(
+    { json: opts.json, timeoutMs: opts.timeoutMs, all: opts.all },
+    runtime,
+  );
+  const securityAudit = opts.json
+    ? await runSecurityAudit({
+        config: scan.cfg,
+        sourceConfig: scan.sourceConfig,
+        deep: false,
+        includeFilesystem: true,
+        includeChannelSecurity: true,
+      })
+    : await withProgress(
+        {
+          label: "Running security audit…",
+          indeterminate: true,
+          enabled: true,
+        },
+        async () =>
+          await runSecurityAudit({
+            config: scan.cfg,
+            sourceConfig: scan.sourceConfig,
+            deep: false,
+            includeFilesystem: true,
+            includeChannelSecurity: true,
+          }),
+      );
   const {
     cfg,
     osSummary,
@@ -126,6 +126,7 @@ export async function statusCommand(
     agentStatus,
     channels,
     summary,
+    secretDiagnostics,
     memory,
     memoryPlugin,
   } = scan;
@@ -202,6 +203,7 @@ export async function statusCommand(
           nodeService: nodeDaemon,
           agents: agentStatus,
           securityAudit,
+          secretDiagnostics,
           ...(health || usage || lastHeartbeat ? { health, usage, lastHeartbeat } : {}),
         },
         null,
@@ -226,6 +228,14 @@ export async function statusCommand(
   }
 
   const tableWidth = Math.max(60, (process.stdout.columns ?? 120) - 1);
+
+  if (secretDiagnostics.length > 0) {
+    runtime.log(theme.warn("Secret diagnostics:"));
+    for (const entry of secretDiagnostics) {
+      runtime.log(`- ${entry}`);
+    }
+    runtime.log("");
+  }
 
   const dashboard = (() => {
     const controlUiEnabled = cfg.gateway?.controlUi?.enabled ?? true;

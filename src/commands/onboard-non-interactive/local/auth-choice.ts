@@ -1,9 +1,10 @@
-import { upsertAuthProfile } from "../../../agents/auth-profiles.js";
-import { normalizeProviderId } from "../../../agents/model-selection.js";
-import { parseDurationMs } from "../../../cli/parse-duration.js";
 import type { OpenClawConfig } from "../../../config/config.js";
 import type { SecretInput } from "../../../config/types.secrets.js";
 import type { RuntimeEnv } from "../../../runtime.js";
+import type { AuthChoice, OnboardOptions } from "../../onboard-types.js";
+import { upsertAuthProfile } from "../../../agents/auth-profiles.js";
+import { normalizeProviderId } from "../../../agents/model-selection.js";
+import { parseDurationMs } from "../../../cli/parse-duration.js";
 import { resolveDefaultSecretProviderAlias } from "../../../secrets/ref-contract.js";
 import { normalizeSecretInput } from "../../../utils/normalize-secret-input.js";
 import { normalizeSecretInputModeInput } from "../../auth-choice.apply-helpers.js";
@@ -63,7 +64,6 @@ import {
   parseNonInteractiveCustomApiFlags,
   resolveCustomProviderId,
 } from "../../onboard-custom.js";
-import type { AuthChoice, OnboardOptions } from "../../onboard-types.js";
 import { applyOpenAIConfig } from "../../openai-model-default.js";
 import { detectZaiEndpoint } from "../../zai-endpoint-detect.js";
 import { resolveNonInteractiveApiKey } from "../api-keys.js";
@@ -91,7 +91,8 @@ export async function applyNonInteractiveAuthChoice(params: {
     ? { secretInputMode: requestedSecretInputMode }
     : undefined;
   const toStoredSecretInput = (resolved: ResolvedNonInteractiveApiKey): SecretInput | null => {
-    if (requestedSecretInputMode !== "ref") {
+    const storePlaintextSecret = requestedSecretInputMode !== "ref"; // pragma: allowlist secret
+    if (storePlaintextSecret) {
       return resolved.key;
     }
     if (resolved.source !== "env") {
@@ -948,7 +949,8 @@ export async function applyNonInteractiveAuthChoice(params: {
       });
       let customApiKeyInput: SecretInput | undefined;
       if (resolvedCustomApiKey) {
-        if (requestedSecretInputMode === "ref") {
+        const storeCustomApiKeyAsRef = requestedSecretInputMode === "ref"; // pragma: allowlist secret
+        if (storeCustomApiKeyAsRef) {
           const stored = toStoredSecretInput(resolvedCustomApiKey);
           if (!stored) {
             return null;

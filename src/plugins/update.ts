@@ -1,8 +1,8 @@
 import fsSync from "node:fs";
 import path from "node:path";
 import type { OpenClawConfig } from "../config/config.js";
-import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
 import type { UpdateChannel } from "../infra/update-channels.js";
+import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
 import { resolveUserPath } from "../utils.js";
 import { resolveBundledPluginSources } from "./bundled-sources.js";
 import {
@@ -79,6 +79,28 @@ type InstallIntegrityDrift = {
     version?: string;
   };
 };
+
+function expectedIntegrityForUpdate(
+  spec: string | undefined,
+  integrity: string | undefined,
+): string | undefined {
+  if (!integrity || !spec) {
+    return undefined;
+  }
+  const value = spec.trim();
+  if (!value) {
+    return undefined;
+  }
+  const at = value.lastIndexOf("@");
+  if (at <= 0 || at >= value.length - 1) {
+    return undefined;
+  }
+  const version = value.slice(at + 1).trim();
+  if (!/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
+    return undefined;
+  }
+  return integrity;
+}
 
 async function readInstalledPackageVersion(dir: string): Promise<string | undefined> {
   const manifestPath = path.join(dir, "package.json");
@@ -246,7 +268,7 @@ export async function updateNpmInstalledPlugins(params: {
           mode: "update",
           dryRun: true,
           expectedPluginId: pluginId,
-          expectedIntegrity: record.integrity,
+          expectedIntegrity: expectedIntegrityForUpdate(record.spec, record.integrity),
           onIntegrityDrift: createPluginUpdateIntegrityDriftHandler({
             pluginId,
             dryRun: true,
@@ -305,7 +327,7 @@ export async function updateNpmInstalledPlugins(params: {
         spec: record.spec,
         mode: "update",
         expectedPluginId: pluginId,
-        expectedIntegrity: record.integrity,
+        expectedIntegrity: expectedIntegrityForUpdate(record.spec, record.integrity),
         onIntegrityDrift: createPluginUpdateIntegrityDriftHandler({
           pluginId,
           dryRun: false,

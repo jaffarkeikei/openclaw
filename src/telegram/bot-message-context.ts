@@ -1,4 +1,13 @@
 import type { Bot } from "grammy";
+import type { MsgContext } from "../auto-reply/templating.js";
+import type { OpenClawConfig } from "../config/config.js";
+import type {
+  DmPolicy,
+  TelegramDirectConfig,
+  TelegramGroupConfig,
+  TelegramTopicConfig,
+} from "../config/types.js";
+import type { StickerMetadata, TelegramContext } from "./bot/types.js";
 import {
   ensureConfiguredAcpRouteReady,
   resolveConfiguredAcpRoute,
@@ -20,7 +29,6 @@ import {
 } from "../auto-reply/reply/history.js";
 import { finalizeInboundContext } from "../auto-reply/reply/inbound-context.js";
 import { buildMentionRegexes, matchesMentionWithExplicit } from "../auto-reply/reply/mentions.js";
-import type { MsgContext } from "../auto-reply/templating.js";
 import { shouldAckReaction as shouldAckReactionGate } from "../channels/ack-reactions.js";
 import { resolveControlCommandGate } from "../channels/command-gating.js";
 import { formatLocationText, toLocationContext } from "../channels/location.js";
@@ -31,17 +39,11 @@ import {
   createStatusReactionController,
   type StatusReactionController,
 } from "../channels/status-reactions.js";
-import type { OpenClawConfig } from "../config/config.js";
 import { loadConfig } from "../config/config.js";
 import { readSessionUpdatedAt, resolveStorePath } from "../config/sessions.js";
-import type {
-  DmPolicy,
-  TelegramDirectConfig,
-  TelegramGroupConfig,
-  TelegramTopicConfig,
-} from "../config/types.js";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
 import { recordChannelActivity } from "../infra/channel-activity.js";
+import { getSessionBindingService } from "../infra/outbound/session-binding-service.js";
 import {
   buildAgentSessionKey,
   pickFirstExistingAgentId,
@@ -51,6 +53,7 @@ import {
 import {
   DEFAULT_ACCOUNT_ID,
   buildAgentMainSessionKey,
+  resolveAgentIdFromSessionKey,
   resolveThreadSessionKeys,
 } from "../routing/session-key.js";
 import { resolvePinnedMainDmOwnerFromAllowlist } from "../security/dm-policy-shared.js";
@@ -78,7 +81,6 @@ import {
   hasBotMention,
   resolveTelegramThreadSpec,
 } from "./bot/helpers.js";
-import type { StickerMetadata, TelegramContext } from "./bot/types.js";
 import { enforceTelegramDmAccess } from "./dm-access.js";
 import { isTelegramForumServiceMessage } from "./forum-service-message.js";
 import { evaluateTelegramGroupBaseAccess } from "./group-access.js";
@@ -257,9 +259,37 @@ export const buildTelegramMessageContext = async ({
     conversationId: peerId,
     parentConversationId: isGroup ? String(chatId) : undefined,
   });
-  const configuredBinding = configuredRoute.configuredBinding;
-  const configuredBindingSessionKey = configuredRoute.boundSessionKey ?? "";
+  let configuredBinding = configuredRoute.configuredBinding;
+  let configuredBindingSessionKey = configuredRoute.boundSessionKey ?? "";
   route = configuredRoute.route;
+  const threadBindingConversationId =
+    replyThreadId != null
+      ? `${chatId}:topic:${replyThreadId}`
+      : !isGroup
+        ? String(chatId)
+        : undefined;
+  if (threadBindingConversationId) {
+    const threadBinding = getSessionBindingService().resolveByConversation({
+      channel: "telegram",
+      accountId: account.accountId,
+      conversationId: threadBindingConversationId,
+    });
+    const boundSessionKey = threadBinding?.targetSessionKey?.trim();
+    if (threadBinding && boundSessionKey) {
+      route = {
+        ...route,
+        sessionKey: boundSessionKey,
+        agentId: resolveAgentIdFromSessionKey(boundSessionKey),
+        matchedBy: "binding.channel",
+      };
+      configuredBinding = null;
+      configuredBindingSessionKey = "";
+      getSessionBindingService().touch(threadBinding.bindingId);
+      logVerbose(
+        `telegram: routed via bound conversation ${threadBindingConversationId} -> ${boundSessionKey}`,
+      );
+    }
+  }
   const requiresExplicitAccountBinding = (candidate: ResolvedAgentRoute): boolean =>
     candidate.accountId !== DEFAULT_ACCOUNT_ID && candidate.matchedBy === "default";
   // Fail closed for named Telegram accounts when route resolution falls back to

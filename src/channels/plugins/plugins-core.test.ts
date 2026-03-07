@@ -7,17 +7,20 @@ import type { DiscordProbe } from "../../discord/probe.js";
 import type { DiscordTokenResolution } from "../../discord/token.js";
 import type { IMessageProbe } from "../../imessage/probe.js";
 import type { LineProbeResult } from "../../line/types.js";
-import { setActivePluginRegistry } from "../../plugins/runtime.js";
 import type { SignalProbe } from "../../signal/probe.js";
 import type { SlackProbe } from "../../slack/probe.js";
 import type { TelegramProbe } from "../../telegram/probe.js";
 import type { TelegramTokenResolution } from "../../telegram/token.js";
+import type { ChannelDirectoryEntry, ChannelOutboundAdapter, ChannelPlugin } from "./types.js";
+import type { BaseProbeResult, BaseTokenResolution } from "./types.js";
+import { setActivePluginRegistry } from "../../plugins/runtime.js";
 import {
   createChannelTestPluginBase,
   createMSTeamsTestPluginBase,
   createOutboundTestPlugin,
   createTestRegistry,
 } from "../../test-utils/channel-plugins.js";
+import { withEnvAsync } from "../../test-utils/env.js";
 import { getChannelPluginCatalogEntry, listChannelPluginCatalogEntries } from "./catalog.js";
 import { resolveChannelConfigWrites } from "./config-writes.js";
 import {
@@ -33,8 +36,6 @@ import {
 import { listChannelPlugins } from "./index.js";
 import { loadChannelPlugin } from "./load.js";
 import { loadChannelOutboundAdapter } from "./outbound/load.js";
-import type { ChannelDirectoryEntry, ChannelOutboundAdapter, ChannelPlugin } from "./types.js";
-import type { BaseProbeResult, BaseTokenResolution } from "./types.js";
 
 describe("channel plugin registry", () => {
   const emptyRegistry = createTestRegistry([]);
@@ -406,6 +407,72 @@ describe("directory (config-backed)", () => {
         sorted: true,
       },
     );
+    await expectDirectoryIds(listTelegramDirectoryGroupsFromConfig, cfg, ["-1001"]);
+  });
+
+  it("keeps Telegram config-backed directory fallback semantics when accountId is omitted", async () => {
+    await withEnvAsync({ TELEGRAM_BOT_TOKEN: "tok-env" }, async () => {
+      const cfg = {
+        channels: {
+          telegram: {
+            allowFrom: ["alice"],
+            groups: { "-1001": {} },
+            accounts: {
+              work: {
+                botToken: "tok-work",
+                allowFrom: ["bob"],
+                groups: { "-2002": {} },
+              },
+            },
+          },
+        },
+        // oxlint-disable-next-line typescript/no-explicit-any
+      } as any;
+
+      await expectDirectoryIds(listTelegramDirectoryPeersFromConfig, cfg, ["@alice"]);
+      await expectDirectoryIds(listTelegramDirectoryGroupsFromConfig, cfg, ["-1001"]);
+    });
+  });
+
+  it("keeps config-backed directories readable when channel tokens are unresolved SecretRefs", async () => {
+    const envSecret = {
+      source: "env",
+      provider: "default",
+      id: "MISSING_TEST_SECRET",
+    } as const;
+    const cfg = {
+      channels: {
+        slack: {
+          botToken: envSecret,
+          appToken: envSecret,
+          dm: { allowFrom: ["U123"] },
+          channels: { C111: {} },
+        },
+        discord: {
+          token: envSecret,
+          dm: { allowFrom: ["<@111>"] },
+          guilds: {
+            "123": {
+              channels: {
+                "555": {},
+              },
+            },
+          },
+        },
+        telegram: {
+          botToken: envSecret,
+          allowFrom: ["alice"],
+          groups: { "-1001": {} },
+        },
+      },
+      // oxlint-disable-next-line typescript/no-explicit-any
+    } as any;
+
+    await expectDirectoryIds(listSlackDirectoryPeersFromConfig, cfg, ["user:u123"]);
+    await expectDirectoryIds(listSlackDirectoryGroupsFromConfig, cfg, ["channel:c111"]);
+    await expectDirectoryIds(listDiscordDirectoryPeersFromConfig, cfg, ["user:111"]);
+    await expectDirectoryIds(listDiscordDirectoryGroupsFromConfig, cfg, ["channel:555"]);
+    await expectDirectoryIds(listTelegramDirectoryPeersFromConfig, cfg, ["@alice"]);
     await expectDirectoryIds(listTelegramDirectoryGroupsFromConfig, cfg, ["-1001"]);
   });
 

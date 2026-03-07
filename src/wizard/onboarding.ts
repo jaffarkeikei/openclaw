@@ -1,4 +1,3 @@
-import { formatCliCommand } from "../cli/command-format.js";
 import type {
   GatewayAuthChoice,
   OnboardMode,
@@ -6,6 +5,9 @@ import type {
   ResetScope,
 } from "../commands/onboard-types.js";
 import type { OpenClawConfig } from "../config/config.js";
+import type { RuntimeEnv } from "../runtime.js";
+import type { QuickstartGatewayDefaults, WizardFlow } from "./onboarding.types.js";
+import { formatCliCommand } from "../cli/command-format.js";
 import {
   DEFAULT_GATEWAY_PORT,
   readConfigFileSnapshot,
@@ -13,11 +15,9 @@ import {
   writeConfigFile,
 } from "../config/config.js";
 import { normalizeSecretInputString } from "../config/types.secrets.js";
-import type { RuntimeEnv } from "../runtime.js";
 import { defaultRuntime } from "../runtime.js";
 import { resolveUserPath } from "../utils.js";
 import { resolveOnboardingSecretInputString } from "./onboarding.secret-input.js";
-import type { QuickstartGatewayDefaults, WizardFlow } from "./onboarding.types.js";
 import { WizardCancelledError, type WizardPrompter } from "./prompts.js";
 
 async function requireRiskAcknowledgement(params: {
@@ -511,6 +511,16 @@ export async function runOnboardingWizard(
   await onboardHelpers.ensureWorkspaceAndSessions(workspaceDir, runtime, {
     skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
   });
+
+  if (opts.skipSearch) {
+    await prompter.note("Skipping search setup.", "Search");
+  } else {
+    const { setupSearch } = await import("../commands/onboard-search.js");
+    nextConfig = await setupSearch(nextConfig, runtime, prompter, {
+      quickstartDefaults: flow === "quickstart",
+      secretInputMode: opts.secretInputMode,
+    });
+  }
 
   if (opts.skipSkills) {
     await prompter.note("Skipping skills setup.", "Skills");

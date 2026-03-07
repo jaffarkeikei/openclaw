@@ -6,13 +6,15 @@
  * @see https://www.open-responses.com/
  */
 
-import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import type { ClientToolDefinition } from "../agents/pi-embedded-runner/run/params.js";
-import { createDefaultDeps } from "../cli/deps.js";
-import { agentCommandFromIngress } from "../commands/agent.js";
 import type { ImageContent } from "../commands/agent/types.js";
 import type { GatewayHttpResponsesConfig } from "../config/types.gateway.js";
+import type { AuthRateLimiter } from "./auth-rate-limit.js";
+import type { ResolvedGatewayAuth } from "./auth.js";
+import { createDefaultDeps } from "../cli/deps.js";
+import { agentCommandFromIngress } from "../commands/agent.js";
 import { emitAgentEvent, onAgentEvent } from "../infra/agent-events.js";
 import { logWarn } from "../logger.js";
 import {
@@ -30,8 +32,6 @@ import {
 } from "../media/input-files.js";
 import { defaultRuntime } from "../runtime.js";
 import { resolveAssistantStreamDeltaText } from "./agent-event-assistant-text.js";
-import type { AuthRateLimiter } from "./auth-rate-limit.js";
-import type { ResolvedGatewayAuth } from "./auth.js";
 import { sendJson, setSseHeaders, writeDone } from "./http-common.js";
 import { handleGatewayPostJsonEndpoint } from "./http-endpoint-helpers.js";
 import { resolveGatewayRequestContext } from "./http-utils.js";
@@ -343,12 +343,18 @@ export async function handleOpenResponsesHttpRequest(
               if (sourceType === "url") {
                 markUrlPart();
               }
-              const imageSource: InputImageSource = {
-                type: sourceType,
-                url: source.url,
-                data: source.data,
-                mediaType: source.media_type,
-              };
+              const imageSource: InputImageSource =
+                sourceType === "url"
+                  ? {
+                      type: "url",
+                      url: source.url ?? "",
+                      mediaType: source.media_type,
+                    }
+                  : {
+                      type: "base64",
+                      data: source.data ?? "",
+                      mediaType: source.media_type,
+                    };
               const image = await extractImageContentFromSource(imageSource, limits.images);
               images.push(image);
               continue;
@@ -371,13 +377,20 @@ export async function handleOpenResponsesHttpRequest(
                 markUrlPart();
               }
               const file = await extractFileContentFromSource({
-                source: {
-                  type: sourceType,
-                  url: source.url,
-                  data: source.data,
-                  mediaType: source.media_type,
-                  filename: source.filename,
-                },
+                source:
+                  sourceType === "url"
+                    ? {
+                        type: "url",
+                        url: source.url ?? "",
+                        mediaType: source.media_type,
+                        filename: source.filename,
+                      }
+                    : {
+                        type: "base64",
+                        data: source.data ?? "",
+                        mediaType: source.media_type,
+                        filename: source.filename,
+                      },
                 limits: limits.files,
               });
               if (file.text?.trim()) {

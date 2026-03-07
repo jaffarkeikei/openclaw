@@ -1,10 +1,10 @@
-import fs from "node:fs";
-import path from "node:path";
-import * as PiCodingAgent from "@mariozechner/pi-coding-agent";
 import type {
   AuthStorage as PiAuthStorage,
   ModelRegistry as PiModelRegistry,
 } from "@mariozechner/pi-coding-agent";
+import * as PiCodingAgent from "@mariozechner/pi-coding-agent";
+import fs from "node:fs";
+import path from "node:path";
 import { ensureAuthProfileStore } from "./auth-profiles.js";
 import { resolvePiCredentialMapFromStore, type PiCredentialMap } from "./pi-auth-credentials.js";
 
@@ -119,9 +119,10 @@ function createAuthStorage(AuthStorageLike: unknown, path: string, creds: PiCred
       ? withFactory.create(path)
       : new (AuthStorageLike as { new (path: string): unknown })(path)
   ) as PiAuthStorage & {
-    setRuntimeApiKey?: (provider: string, apiKey: string) => void;
+    setRuntimeApiKey?: (provider: string, apiKey: string) => void; // pragma: allowlist secret
   };
-  if (typeof withRuntimeOverride.setRuntimeApiKey === "function") {
+  const hasRuntimeApiKeyOverride = typeof withRuntimeOverride.setRuntimeApiKey === "function"; // pragma: allowlist secret
+  if (hasRuntimeApiKeyOverride) {
     for (const [provider, credential] of Object.entries(creds)) {
       if (credential.type === "api_key") {
         withRuntimeOverride.setRuntimeApiKey(provider, credential.key);

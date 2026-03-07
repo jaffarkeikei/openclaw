@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import type { OpenClawConfig } from "../../config/config.js";
 import { resolveOpenClawAgentDir } from "../../agents/agent-paths.js";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../../agents/agent-scope.js";
 import {
@@ -21,7 +22,6 @@ import {
 } from "../../agents/model-selection.js";
 import { runEmbeddedPiAgent } from "../../agents/pi-embedded.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../agents/workspace.js";
-import type { OpenClawConfig } from "../../config/config.js";
 import {
   resolveSessionTranscriptPath,
   resolveSessionTranscriptsDirForAgent,
@@ -106,7 +106,7 @@ export function mapFailoverReasonToProbeStatus(reason?: string | null): AuthProb
     // surface in the auth bucket instead of showing as unknown.
     return "auth";
   }
-  if (reason === "rate_limit") {
+  if (reason === "rate_limit" || reason === "overloaded") {
     return "rate_limit";
   }
   if (reason === "billing") {

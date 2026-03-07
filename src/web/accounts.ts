@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createAccountListHelpers } from "../channels/plugins/account-helpers.js";
 import type { OpenClawConfig } from "../config/config.js";
-import { resolveOAuthDir } from "../config/paths.js";
 import type { DmPolicy, GroupPolicy, WhatsAppAccountConfig } from "../config/types.js";
+import { createAccountListHelpers } from "../channels/plugins/account-helpers.js";
+import { resolveOAuthDir } from "../config/paths.js";
 import { resolveAccountEntry } from "../routing/account-lookup.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
 import { resolveUserPath } from "../utils.js";
@@ -30,6 +30,8 @@ export type ResolvedWhatsAppAccount = {
   groups?: WhatsAppAccountConfig["groups"];
   debounceMs?: number;
 };
+
+export const DEFAULT_WHATSAPP_MEDIA_MAX_MB = 50;
 
 const { listConfiguredAccountIds, listAccountIds, resolveDefaultAccountId } =
   createAccountListHelpers("whatsapp");
@@ -145,6 +147,16 @@ export function resolveWhatsAppAccount(params: {
     groups: accountCfg?.groups ?? rootCfg?.groups,
     debounceMs: accountCfg?.debounceMs ?? rootCfg?.debounceMs,
   };
+}
+
+export function resolveWhatsAppMediaMaxBytes(
+  account: Pick<ResolvedWhatsAppAccount, "mediaMaxMb">,
+): number {
+  const mediaMaxMb =
+    typeof account.mediaMaxMb === "number" && account.mediaMaxMb > 0
+      ? account.mediaMaxMb
+      : DEFAULT_WHATSAPP_MEDIA_MAX_MB;
+  return mediaMaxMb * 1024 * 1024;
 }
 
 export function listEnabledWhatsAppAccounts(cfg: OpenClawConfig): ResolvedWhatsAppAccount[] {

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { resolvePreferredOpenClawTmpDir } from "../../../../src/infra/tmp-openclaw-dir.js";
 import type { ResolvedAcpxPluginConfig } from "../config.js";
+import { resolvePreferredOpenClawTmpDir } from "../../../../src/infra/tmp-openclaw-dir.js";
 import { ACPX_PINNED_VERSION } from "../config.js";
 import { AcpxRuntime } from "../runtime.js";
 
@@ -221,6 +221,10 @@ if (command === "prompt") {
       message: "mock failure",
     });
     process.exit(1);
+  }
+
+  if (stdinText.includes("permission-denied")) {
+    process.exit(5);
   }
 
   if (stdinText.includes("split-spacing")) {

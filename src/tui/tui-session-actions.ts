@@ -1,14 +1,14 @@
 import type { TUI } from "@mariozechner/pi-tui";
 import type { SessionsPatchResult } from "../gateway/protocol/index.js";
+import type { ChatLog } from "./components/chat-log.js";
+import type { GatewayAgentsList, GatewayChatClient } from "./gateway-chat.js";
+import type { SessionInfo, TuiOptions, TuiStateAccess } from "./tui-types.js";
 import {
   normalizeAgentId,
   normalizeMainKey,
   parseAgentSessionKey,
 } from "../routing/session-key.js";
-import type { ChatLog } from "./components/chat-log.js";
-import type { GatewayAgentsList, GatewayChatClient } from "./gateway-chat.js";
 import { asString, extractTextFromMessage, isCommandMessage } from "./tui-formatters.js";
-import type { SessionInfo, TuiOptions, TuiStateAccess } from "./tui-types.js";
 
 type SessionActionContext = {
   client: GatewayChatClient;
@@ -151,17 +151,12 @@ export function createSessionActions(context: SessionActionContext) {
 
     const entryUpdatedAt = entry?.updatedAt ?? null;
     const currentUpdatedAt = state.sessionInfo.updatedAt ?? null;
-    const modelChanged =
-      (entry?.modelProvider !== undefined &&
-        entry.modelProvider !== state.sessionInfo.modelProvider) ||
-      (entry?.model !== undefined && entry.model !== state.sessionInfo.model);
     if (
       !params.force &&
       entryUpdatedAt !== null &&
       currentUpdatedAt !== null &&
       entryUpdatedAt < currentUpdatedAt &&
-      !defaultsChanged &&
-      !modelChanged
+      !defaultsChanged
     ) {
       return;
     }
@@ -362,6 +357,9 @@ export function createSessionActions(context: SessionActionContext) {
     state.currentSessionKey = nextKey;
     state.activeChatRunId = null;
     state.currentSessionId = null;
+    // Session keys can move backwards in updatedAt ordering; drop previous session freshness
+    // so refresh data for the newly selected session isn't rejected as stale.
+    state.sessionInfo.updatedAt = null;
     state.historyLoaded = false;
     clearLocalRunIds?.();
     updateHeader();

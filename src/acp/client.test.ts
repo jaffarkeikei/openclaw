@@ -1,6 +1,6 @@
+import type { RequestPermissionRequest } from "@agentclientprotocol/sdk";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { RequestPermissionRequest } from "@agentclientprotocol/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTrackedTempDirs } from "../test-utils/tracked-temp-dirs.js";
 import {
@@ -59,6 +59,49 @@ describe("resolveAcpClientSpawnEnv", () => {
       OPENCLAW_SHELL: "wrong",
     });
     expect(env.OPENCLAW_SHELL).toBe("acp-client");
+  });
+
+  it("strips skill-injected env keys when stripKeys is provided", () => {
+    const stripKeys = new Set(["OPENAI_API_KEY", "ELEVENLABS_API_KEY"]);
+    const env = resolveAcpClientSpawnEnv(
+      {
+        PATH: "/usr/bin",
+        OPENAI_API_KEY: "sk-leaked-from-skill",
+        ELEVENLABS_API_KEY: "el-leaked",
+        ANTHROPIC_API_KEY: "sk-keep-this",
+      },
+      { stripKeys },
+    );
+
+    expect(env.PATH).toBe("/usr/bin");
+    expect(env.OPENCLAW_SHELL).toBe("acp-client");
+    expect(env.ANTHROPIC_API_KEY).toBe("sk-keep-this");
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.ELEVENLABS_API_KEY).toBeUndefined();
+  });
+
+  it("does not modify the original baseEnv when stripping keys", () => {
+    const baseEnv: NodeJS.ProcessEnv = {
+      OPENAI_API_KEY: "sk-original",
+      PATH: "/usr/bin",
+    };
+    const stripKeys = new Set(["OPENAI_API_KEY"]);
+    resolveAcpClientSpawnEnv(baseEnv, { stripKeys });
+
+    expect(baseEnv.OPENAI_API_KEY).toBe("sk-original");
+  });
+
+  it("preserves OPENCLAW_SHELL even when stripKeys contains it", () => {
+    const env = resolveAcpClientSpawnEnv(
+      {
+        OPENCLAW_SHELL: "skill-overridden",
+        OPENAI_API_KEY: "sk-leaked",
+      },
+      { stripKeys: new Set(["OPENCLAW_SHELL", "OPENAI_API_KEY"]) },
+    );
+
+    expect(env.OPENCLAW_SHELL).toBe("acp-client");
+    expect(env.OPENAI_API_KEY).toBeUndefined();
   });
 });
 

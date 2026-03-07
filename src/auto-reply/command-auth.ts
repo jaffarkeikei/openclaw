@@ -1,14 +1,14 @@
 import type { ChannelDock } from "../channels/dock.js";
-import { getChannelDock, listChannelDocks } from "../channels/dock.js";
 import type { ChannelId } from "../channels/plugins/types.js";
-import { normalizeAnyChannelId } from "../channels/registry.js";
 import type { OpenClawConfig } from "../config/config.js";
+import type { MsgContext } from "./templating.js";
+import { getChannelDock, listChannelDocks } from "../channels/dock.js";
+import { normalizeAnyChannelId } from "../channels/registry.js";
 import {
   INTERNAL_MESSAGE_CHANNEL,
   isInternalMessageChannel,
   normalizeMessageChannel,
 } from "../utils/message-channel.js";
-import type { MsgContext } from "./templating.js";
 
 export type CommandAuthorization = {
   providerId?: ChannelId;
@@ -350,8 +350,8 @@ export function resolveCommandAuthorization(params: {
     isInternalMessageChannel(ctx.Provider) &&
     Array.isArray(ctx.GatewayClientScopes) &&
     ctx.GatewayClientScopes.includes("operator.admin");
-  const senderIsOwner = senderIsOwnerByIdentity || senderIsOwnerByScope;
   const ownerAllowlistConfigured = ownerAllowAll || explicitOwners.length > 0;
+  const senderIsOwner = senderIsOwnerByIdentity || senderIsOwnerByScope || ownerAllowAll;
   const requireOwner = enforceOwner || ownerAllowlistConfigured;
   const isOwnerForCommands = !requireOwner
     ? true

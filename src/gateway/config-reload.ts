@@ -1,12 +1,12 @@
-import { isDeepStrictEqual } from "node:util";
 import chokidar from "chokidar";
+import { isDeepStrictEqual } from "node:util";
 import type { OpenClawConfig, ConfigFileSnapshot, GatewayReloadMode } from "../config/config.js";
 import { formatConfigIssueLines } from "../config/issue-format.js";
 import { isPlainObject } from "../utils.js";
 import { buildGatewayReloadPlan, type GatewayReloadPlan } from "./config-reload-plan.js";
 
 export { buildGatewayReloadPlan };
-export type { GatewayReloadPlan } from "./config-reload-plan.js";
+export type { ChannelKind, GatewayReloadPlan } from "./config-reload-plan.js";
 
 export type GatewayReloadSettings = {
   mode: GatewayReloadMode;

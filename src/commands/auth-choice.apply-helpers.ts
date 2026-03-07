@@ -1,5 +1,8 @@
-import { resolveEnvApiKey } from "../agents/model-auth.js";
 import type { OpenClawConfig } from "../config/types.js";
+import type { WizardPrompter } from "../wizard/prompts.js";
+import type { ApplyAuthChoiceParams } from "./auth-choice.apply.js";
+import type { SecretInputMode } from "./onboard-types.js";
+import { resolveEnvApiKey } from "../agents/model-auth.js";
 import {
   isValidEnvSecretRefId,
   type SecretInput,
@@ -12,15 +15,12 @@ import {
   resolveDefaultSecretProviderAlias,
 } from "../secrets/ref-contract.js";
 import { resolveSecretRefString } from "../secrets/resolve.js";
-import type { WizardPrompter } from "../wizard/prompts.js";
 import { formatApiKeyPreview } from "./auth-choice.api-key.js";
-import type { ApplyAuthChoiceParams } from "./auth-choice.apply.js";
 import { applyDefaultModelChoice } from "./auth-choice.default-model.js";
-import type { SecretInputMode } from "./onboard-types.js";
 
 const ENV_SOURCE_LABEL_RE = /(?:^|:\s)([A-Z][A-Z0-9_]*)$/;
 
-type SecretRefChoice = "env" | "provider";
+type SecretRefChoice = "env" | "provider"; // pragma: allowlist secret
 
 export type SecretInputModePromptCopy = {
   modeMessage?: string;
@@ -101,7 +101,7 @@ export async function promptSecretRefForOnboarding(params: {
   const defaultEnvVar =
     params.preferredEnvVar ?? resolveDefaultProviderEnvVar(params.provider) ?? "";
   const defaultFilePointer = resolveDefaultFilePointerId(params.provider);
-  let sourceChoice: SecretRefChoice = "env";
+  let sourceChoice: SecretRefChoice = "env"; // pragma: allowlist secret
 
   while (true) {
     const sourceRaw: SecretRefChoice = await params.prompter.select<SecretRefChoice>({

@@ -1,11 +1,11 @@
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import type {
   OpenClawPluginApi,
   OpenClawPluginCommandDefinition,
   PluginCommandContext,
 } from "openclaw/plugin-sdk/phone-control";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import registerPhoneControl from "./index.js";
 
@@ -39,6 +39,7 @@ function createApi(params: {
     registerCli() {},
     registerService() {},
     registerProvider() {},
+    registerContextEngine() {},
     registerCommand: params.registerCommand,
     resolvePath(input: string) {
       return input;

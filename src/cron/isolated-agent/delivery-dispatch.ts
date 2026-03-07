@@ -1,9 +1,12 @@
+import type { ReplyPayload } from "../../auto-reply/types.js";
+import type { OpenClawConfig } from "../../config/config.js";
+import type { CronJob, CronRunTelemetry } from "../types.js";
+import type { DeliveryTargetResolution } from "./delivery-target.js";
+import type { RunCronAgentTurnResult } from "./run.js";
 import { runSubagentAnnounceFlow } from "../../agents/subagent-announce.js";
 import { countActiveDescendantRuns } from "../../agents/subagent-registry.js";
 import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
-import type { ReplyPayload } from "../../auto-reply/types.js";
 import { createOutboundSendDeps, type CliDeps } from "../../cli/outbound-send-deps.js";
-import type { OpenClawConfig } from "../../config/config.js";
 import { resolveAgentMainSessionKey } from "../../config/sessions.js";
 import { deliverOutboundPayloads } from "../../infra/outbound/deliver.js";
 import { resolveAgentOutboundIdentity } from "../../infra/outbound/identity.js";
@@ -13,10 +16,7 @@ import {
 } from "../../infra/outbound/outbound-session.js";
 import { buildOutboundSessionContext } from "../../infra/outbound/session-context.js";
 import { logWarn } from "../../logger.js";
-import type { CronJob, CronRunTelemetry } from "../types.js";
-import type { DeliveryTargetResolution } from "./delivery-target.js";
 import { pickSummaryFromOutput } from "./helpers.js";
-import type { RunCronAgentTurnResult } from "./run.js";
 import {
   expectsSubagentFollowup,
   isLikelyInterimCronMessage,
@@ -275,7 +275,19 @@ export async function dispatchCronDelivery(
     const initialSynthesizedText = synthesizedText.trim();
     let activeSubagentRuns = countActiveDescendantRuns(params.agentSessionKey);
     const expectedSubagentFollowup = expectsSubagentFollowup(initialSynthesizedText);
-    const hadActiveDescendants = activeSubagentRuns > 0;
+    // Also check for already-completed descendants. If the subagent finished
+    // before delivery-dispatch runs, activeSubagentRuns is 0 and
+    // expectedSubagentFollowup may be false (e.g. cron said "on it" which
+    // doesn't match the narrow hint list). We still need to use the
+    // descendant's output instead of the interim cron text.
+    const completedDescendantReply =
+      activeSubagentRuns === 0 && isLikelyInterimCronMessage(initialSynthesizedText)
+        ? await readDescendantSubagentFallbackReply({
+            sessionKey: params.agentSessionKey,
+            runStartedAt: params.runStartedAt,
+          })
+        : undefined;
+    const hadDescendants = activeSubagentRuns > 0 || Boolean(completedDescendantReply);
     if (activeSubagentRuns > 0 || expectedSubagentFollowup) {
       let finalReply = await waitForDescendantSubagentSummary({
         sessionKey: params.agentSessionKey,
@@ -284,11 +296,7 @@ export async function dispatchCronDelivery(
         observedActiveDescendants: activeSubagentRuns > 0 || expectedSubagentFollowup,
       });
       activeSubagentRuns = countActiveDescendantRuns(params.agentSessionKey);
-      if (
-        !finalReply &&
-        activeSubagentRuns === 0 &&
-        (hadActiveDescendants || expectedSubagentFollowup)
-      ) {
+      if (!finalReply && activeSubagentRuns === 0) {
         finalReply = await readDescendantSubagentFallbackReply({
           sessionKey: params.agentSessionKey,
           runStartedAt: params.runStartedAt,
@@ -300,6 +308,13 @@ export async function dispatchCronDelivery(
         synthesizedText = finalReply;
         deliveryPayloads = [{ text: finalReply }];
       }
+    } else if (completedDescendantReply) {
+      // Descendants already finished before we got here. Use their output
+      // directly instead of the cron agent's interim text.
+      outputText = completedDescendantReply;
+      summary = pickSummaryFromOutput(completedDescendantReply) ?? summary;
+      synthesizedText = completedDescendantReply;
+      deliveryPayloads = [{ text: completedDescendantReply }];
     }
     if (activeSubagentRuns > 0) {
       // Parent orchestration is still in progress; avoid announcing a partial
@@ -307,13 +322,14 @@ export async function dispatchCronDelivery(
       return params.withRunSession({ status: "ok", summary, outputText, ...params.telemetry });
     }
     if (
-      (hadActiveDescendants || expectedSubagentFollowup) &&
+      hadDescendants &&
       synthesizedText.trim() === initialSynthesizedText &&
       isLikelyInterimCronMessage(initialSynthesizedText) &&
       initialSynthesizedText.toUpperCase() !== SILENT_REPLY_TOKEN.toUpperCase()
     ) {
-      // Descendants existed but no post-orchestration synthesis arrived, so
-      // suppress stale parent text like "on it, pulling everything together".
+      // Descendants existed but no post-orchestration synthesis arrived AND
+      // no descendant fallback reply was available. Suppress stale parent
+      // text like "on it, pulling everything together".
       return params.withRunSession({ status: "ok", summary, outputText, ...params.telemetry });
     }
     if (synthesizedText.toUpperCase() === SILENT_REPLY_TOKEN.toUpperCase()) {

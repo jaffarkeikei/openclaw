@@ -1,12 +1,13 @@
 import { isIP } from "node:net";
 import path from "node:path";
+import type { ConfigFileSnapshot, OpenClawConfig } from "../config/config.js";
+import type { ExecFn } from "./windows-acl.js";
 import { resolveSandboxConfigForAgent } from "../agents/sandbox.js";
 import { execDockerRaw } from "../agents/sandbox/docker.js";
 import { resolveBrowserConfig, resolveProfile } from "../browser/config.js";
 import { resolveBrowserControlAuth } from "../browser/control-auth.js";
 import { listChannelPlugins } from "../channels/plugins/index.js";
 import { formatCliCommand } from "../cli/command-format.js";
-import type { ConfigFileSnapshot, OpenClawConfig } from "../config/config.js";
 import { resolveConfigPath, resolveStateDir } from "../config/paths.js";
 import { hasConfiguredSecretInput } from "../config/types.secrets.js";
 import { resolveGatewayAuth } from "../gateway/auth.js";
@@ -51,7 +52,6 @@ import {
 } from "./audit-fs.js";
 import { collectEnabledInsecureOrDangerousFlags } from "./dangerous-config-flags.js";
 import { DEFAULT_GATEWAY_HTTP_TOOL_DENY } from "./dangerous-tools.js";
-import type { ExecFn } from "./windows-acl.js";
 
 export type SecurityAuditSeverity = "info" | "warn" | "critical";
 
@@ -86,6 +86,7 @@ export type SecurityAuditReport = {
 
 export type SecurityAuditOptions = {
   config: OpenClawConfig;
+  sourceConfig?: OpenClawConfig;
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
   deep?: boolean;
@@ -113,6 +114,7 @@ export type SecurityAuditOptions = {
 
 type AuditExecutionContext = {
   cfg: OpenClawConfig;
+  sourceConfig: OpenClawConfig;
   env: NodeJS.ProcessEnv;
   platform: NodeJS.Platform;
   includeFilesystem: boolean;
@@ -1092,6 +1094,7 @@ async function createAuditExecutionContext(
   opts: SecurityAuditOptions,
 ): Promise<AuditExecutionContext> {
   const cfg = opts.config;
+  const sourceConfig = opts.sourceConfig ?? opts.config;
   const env = opts.env ?? process.env;
   const platform = opts.platform ?? process.platform;
   const includeFilesystem = opts.includeFilesystem !== false;
@@ -1107,6 +1110,7 @@ async function createAuditExecutionContext(
     : null;
   return {
     cfg,
+    sourceConfig,
     env,
     platform,
     includeFilesystem,
@@ -1206,7 +1210,13 @@ export async function runSecurityAudit(opts: SecurityAuditOptions): Promise<Secu
 
   if (context.includeChannelSecurity) {
     const plugins = context.plugins ?? listChannelPlugins();
-    findings.push(...(await collectChannelSecurityFindings({ cfg, plugins })));
+    findings.push(
+      ...(await collectChannelSecurityFindings({
+        cfg,
+        sourceConfig: context.sourceConfig,
+        plugins,
+      })),
+    );
   }
 
   const deepProbeResult = context.deep
