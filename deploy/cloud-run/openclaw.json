@@ -7,10 +7,6 @@
       "model": {
         "primary": "cerebras/llama3.1-8b",
         "fallbacks": ["cerebras/qwen-3-235b-a22b-instruct-2507"]
-      },
-      "tools": {
-        "browser": false,
-        "sandbox": false
       }
     }
   },
