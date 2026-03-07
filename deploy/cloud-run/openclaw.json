@@ -5,8 +5,12 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "cerebras/qwen-3-235b-a22b-instruct-2507",
-        "fallbacks": ["anthropic/claude-haiku-4-5", "openai/gpt-4o-mini"]
+        "primary": "cerebras/llama3.1-8b",
+        "fallbacks": ["cerebras/qwen-3-235b-a22b-instruct-2507"]
+      },
+      "tools": {
+        "browser": false,
+        "sandbox": false
       }
     }
   },
