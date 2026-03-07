@@ -1,4 +1,3 @@
-import { formatCliCommand } from "../cli/command-format.js";
 import type { PairingChannel } from "./pairing-store.js";
 
 export function buildPairingReply(params: {
@@ -6,15 +5,14 @@ export function buildPairingReply(params: {
   idLine: string;
   code: string;
 }): string {
-  const { channel, idLine, code } = params;
+  const { idLine, code } = params;
   return [
-    "OpenClaw: access not configured.",
+    "Welcome! Your account isn't paired yet.",
     "",
     idLine,
     "",
     `Pairing code: ${code}`,
     "",
-    "Ask the bot owner to approve with:",
-    formatCliCommand(`openclaw pairing approve ${channel} ${code}`),
+    "Enter your user ID and pairing code in the Anza dashboard to connect.",
   ].join("\n");
 }
