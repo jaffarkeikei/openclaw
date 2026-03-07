@@ -14,6 +14,14 @@
     "whatsapp": {
       "dmPolicy": "pairing",
       "groupPolicy": "disabled"
+    },
+    "telegram": {
+      "botToken": "__TELEGRAM_BOT_TOKEN__",
+      "dmPolicy": "open"
+    },
+    "discord": {
+      "botToken": "__DISCORD_BOT_TOKEN__",
+      "dmPolicy": "open"
     }
   },
   "gateway": {

@@ -17,6 +17,16 @@ else
   echo "[cloud-run] Using existing config at $CONFIG_FILE"
 fi
 
+# Inject bot tokens from environment variables into config
+if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+  sed -i "s|__TELEGRAM_BOT_TOKEN__|$TELEGRAM_BOT_TOKEN|g" "$CONFIG_FILE"
+  echo "[cloud-run] Injected TELEGRAM_BOT_TOKEN"
+fi
+if [ -n "$DISCORD_BOT_TOKEN" ]; then
+  sed -i "s|__DISCORD_BOT_TOKEN__|$DISCORD_BOT_TOKEN|g" "$CONFIG_FILE"
+  echo "[cloud-run] Injected DISCORD_BOT_TOKEN"
+fi
+
 PORT="${PORT:-8080}"
 
 exec node openclaw.mjs gateway \
