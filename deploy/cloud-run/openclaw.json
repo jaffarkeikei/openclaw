@@ -16,7 +16,7 @@
       "groupPolicy": "disabled"
     },
     "telegram": {
-      "token": "__TELEGRAM_BOT_TOKEN__",
+      "botToken": "__TELEGRAM_BOT_TOKEN__",
       "dmPolicy": "open",
       "allowFrom": ["*"]
     },
