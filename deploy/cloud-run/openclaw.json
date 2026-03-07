@@ -16,12 +16,14 @@
       "groupPolicy": "disabled"
     },
     "telegram": {
-      "botToken": "__TELEGRAM_BOT_TOKEN__",
-      "dmPolicy": "open"
+      "token": "__TELEGRAM_BOT_TOKEN__",
+      "dmPolicy": "open",
+      "allowFrom": ["*"]
     },
     "discord": {
-      "botToken": "__DISCORD_BOT_TOKEN__",
-      "dmPolicy": "open"
+      "token": "__DISCORD_BOT_TOKEN__",
+      "dmPolicy": "open",
+      "allowFrom": ["*"]
     }
   },
   "gateway": {
