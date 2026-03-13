@@ -137,6 +137,59 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     return;
   }
 
+  // If messageForwardUrl is set, forward the DM to an external handler (e.g. Snowball) instead of
+  // running the local agent. The handler receives the raw message and returns a reply.
+  const messageForwardUrl = discordConfig?.messageForwardUrl?.trim();
+  if (messageForwardUrl && isDirectMessage) {
+    try {
+      const forwardSecret = discordConfig?.messageForwardSecret?.trim() ?? null;
+      const reqHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (forwardSecret) reqHeaders["x-forward-secret"] = forwardSecret;
+
+      const forwardRes = await fetch(messageForwardUrl, {
+        method: "POST",
+        headers: reqHeaders,
+        body: JSON.stringify({
+          channel: "discord",
+          channelUserId: author.id,
+          text,
+          sessionKey: route.sessionKey,
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+
+      if (!forwardRes.ok) {
+        throw new Error(`Forward handler returned ${forwardRes.status}`);
+      }
+
+      const forwardBody = (await forwardRes.json()) as { reply?: string; error?: string };
+      if (!forwardBody.reply) {
+        throw new Error(forwardBody.error ?? "No reply returned from forward handler");
+      }
+
+      await deliverDiscordReply({
+        replies: [{ text: forwardBody.reply }],
+        target: `channel:${messageChannelId}`,
+        token,
+        accountId,
+        rest: client.rest as unknown as RequestClient,
+        runtime,
+        replyToId: message.id,
+        replyToMode,
+        textLimit,
+        maxLinesPerMessage: discordConfig?.maxLinesPerMessage,
+        tableMode: resolveMarkdownTableMode({ cfg, channel: "discord", accountId }),
+        chunkMode: resolveChunkMode(cfg, "discord", accountId),
+        sessionKey: route.sessionKey,
+        threadBindings,
+        mediaLocalRoots: getAgentScopedMediaLocalRoots(cfg, route.agentId),
+      });
+    } catch (err) {
+      runtime.error?.(danger(`discord: message forward failed: ${String(err)}`));
+    }
+    return;
+  }
+
   const boundThreadId = ctx.threadBinding?.conversation?.conversationId?.trim();
   if (boundThreadId && typeof threadBindings.touchThread === "function") {
     threadBindings.touchThread({ threadId: boundThreadId });
