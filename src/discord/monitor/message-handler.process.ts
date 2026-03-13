@@ -168,6 +168,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       }
 
       await deliverDiscordReply({
+        cfg,
         replies: [{ text: forwardBody.reply }],
         target: `channel:${messageChannelId}`,
         token,
@@ -177,7 +178,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         replyToId: message.id,
         replyToMode,
         textLimit,
-        maxLinesPerMessage: discordConfig?.maxLinesPerMessage,
+        maxLinesPerMessage: resolveDiscordMaxLinesPerMessage({ cfg, discordConfig, accountId }),
         tableMode: resolveMarkdownTableMode({ cfg, channel: "discord", accountId }),
         chunkMode: resolveChunkMode(cfg, "discord", accountId),
         sessionKey: route.sessionKey,
