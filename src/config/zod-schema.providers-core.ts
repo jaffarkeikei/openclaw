@@ -266,6 +266,8 @@ export const TelegramAccountSchemaBase = z
     linkPreview: z.boolean().optional(),
     responsePrefix: z.string().optional(),
     ackReaction: z.string().optional(),
+    messageForwardUrl: z.string().optional(),
+    messageForwardSecret: z.string().optional(),
   })
   .strict();
 
@@ -588,6 +590,8 @@ export const DiscordAccountSchema = z
       })
       .strict()
       .optional(),
+    messageForwardUrl: z.string().optional(),
+    messageForwardSecret: z.string().optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
