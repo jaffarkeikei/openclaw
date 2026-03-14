@@ -147,6 +147,56 @@ export function createWebOnMessageHandler(params: {
       if (!msg.senderE164 && peerId && peerId.startsWith("+")) {
         msg.senderE164 = normalizeE164(peerId) ?? msg.senderE164;
       }
+
+      // If messageForwardUrl is set, forward the DM to an external handler (e.g. Snowball) instead of
+      // running the local agent. The handler receives the raw message and returns a reply.
+      const whatsappCfg = params.cfg.channels?.whatsapp as
+        | { messageForwardUrl?: string; messageForwardSecret?: string; accounts?: Record<string, { messageForwardUrl?: string; messageForwardSecret?: string }> }
+        | undefined;
+      const accountCfg = msg.accountId ? whatsappCfg?.accounts?.[msg.accountId] : undefined;
+      const messageForwardUrl = (accountCfg?.messageForwardUrl ?? whatsappCfg?.messageForwardUrl)?.trim();
+      if (messageForwardUrl) {
+        const text = (msg.body ?? "").trim();
+        if (text) {
+          try {
+            const messageForwardSecret = (accountCfg?.messageForwardSecret ?? whatsappCfg?.messageForwardSecret)?.trim() ?? null;
+            const reqHeaders: Record<string, string> = { "Content-Type": "application/json" };
+            if (messageForwardSecret) reqHeaders["x-forward-secret"] = messageForwardSecret;
+
+            const channelUserId = msg.senderE164 ?? msg.from;
+            const forwardRes = await fetch(messageForwardUrl, {
+              method: "POST",
+              headers: reqHeaders,
+              body: JSON.stringify({
+                channel: "whatsapp",
+                channelUserId,
+                text,
+                sessionKey: route.sessionKey,
+              }),
+              signal: AbortSignal.timeout(30_000),
+            });
+
+            if (!forwardRes.ok) {
+              throw new Error(`Forward handler returned ${forwardRes.status}`);
+            }
+            const forwardBody = (await forwardRes.json()) as { reply?: string; error?: string };
+            if (!forwardBody.reply) {
+              throw new Error(forwardBody.error ?? "No reply returned from forward handler");
+            }
+
+            // Send the reply back directly via WhatsApp's outbound API.
+            const { sendMessageWhatsApp } = await import("../../../web/outbound.js");
+            await sendMessageWhatsApp(channelUserId, forwardBody.reply, {
+              verbose: params.verbose,
+              cfg: params.cfg,
+              accountId: msg.accountId,
+            });
+          } catch (err) {
+            logVerbose(`whatsapp: message forward failed: ${String(err)}`);
+          }
+          return;
+        }
+      }
     }
 
     // Broadcast groups: when we'd reply anyway, run multiple agents.

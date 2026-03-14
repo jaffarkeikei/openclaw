@@ -95,6 +95,17 @@ export type TelegramAccountConfig = {
   botToken?: string;
   /** Path to a regular file containing the bot token; symlinks are rejected. */
   tokenFile?: string;
+  /**
+   * Forward incoming DMs to an external HTTP handler instead of processing with the local agent.
+   * The handler receives `{ channel, channelUserId, text, sessionKey }` as JSON and must return `{ reply: string }`.
+   * When set, the local agent is bypassed entirely for direct messages.
+   */
+  messageForwardUrl?: string;
+  /**
+   * Shared secret sent as `X-Forward-Secret` header with every forwarded message.
+   * The receiving handler should validate this to reject unauthorized callers.
+   */
+  messageForwardSecret?: string;
   /** Control reply threading when reply tags are present (off|first|all). */
   replyToMode?: ReplyToMode;
   groups?: Record<string, TelegramGroupConfig>;

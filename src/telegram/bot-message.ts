@@ -79,6 +79,53 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
     if (!context) {
       return;
     }
+
+    // If messageForwardUrl is set, forward the DM to an external handler (e.g. Snowball) instead of
+    // running the local agent. The handler receives the raw message and returns a reply.
+    const messageForwardUrl = telegramCfg.messageForwardUrl?.trim();
+    if (messageForwardUrl && !context.isGroup) {
+      const text =
+        typeof context.ctxPayload.BodyForAgent === "string"
+          ? context.ctxPayload.BodyForAgent.trim()
+          : "";
+      if (text) {
+        try {
+          const forwardSecret = telegramCfg.messageForwardSecret?.trim() ?? null;
+          const reqHeaders: Record<string, string> = { "Content-Type": "application/json" };
+          if (forwardSecret) reqHeaders["x-forward-secret"] = forwardSecret;
+
+          const forwardRes = await fetch(messageForwardUrl, {
+            method: "POST",
+            headers: reqHeaders,
+            body: JSON.stringify({
+              channel: "telegram",
+              channelUserId: String(context.msg.from?.id ?? context.chatId),
+              text,
+              sessionKey: context.route.sessionKey,
+            }),
+            signal: AbortSignal.timeout(30_000),
+          });
+
+          if (!forwardRes.ok) {
+            throw new Error(`Forward handler returned ${forwardRes.status}`);
+          }
+          const forwardBody = (await forwardRes.json()) as { reply?: string; error?: string };
+          if (!forwardBody.reply) {
+            throw new Error(forwardBody.error ?? "No reply returned from forward handler");
+          }
+
+          await bot.api.sendMessage(
+            context.chatId,
+            forwardBody.reply,
+            context.threadSpec?.id != null ? { message_thread_id: context.threadSpec.id } : undefined,
+          );
+        } catch (err) {
+          runtime.error?.(danger(`telegram: message forward failed: ${String(err)}`));
+        }
+        return;
+      }
+    }
+
     try {
       await dispatchTelegramMessage({
         context,

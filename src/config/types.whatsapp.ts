@@ -78,6 +78,17 @@ type WhatsAppSharedConfig = {
   debounceMs?: number;
   /** Heartbeat visibility settings. */
   heartbeat?: ChannelHeartbeatVisibilityConfig;
+  /**
+   * Forward incoming DMs to an external HTTP handler instead of processing with the local agent.
+   * The handler receives `{ channel, channelUserId, text, sessionKey }` as JSON and must return `{ reply: string }`.
+   * When set, the local agent is bypassed entirely for direct messages.
+   */
+  messageForwardUrl?: string;
+  /**
+   * Shared secret sent as `X-Forward-Secret` header with every forwarded message.
+   * The receiving handler should validate this to reject unauthorized callers.
+   */
+  messageForwardSecret?: string;
 };
 
 type WhatsAppConfigCore = {
