@@ -131,5 +131,10 @@ jobs:
             OPENCLAW_IMAGE=ghcr.io/jaffarkeikei/openclaw:main \
               docker compose up -d openclaw-gateway openclaw-cli
             docker logout ghcr.io
+            # Prune old images and build cache to prevent disk from filling up
+            docker image prune -af --filter "until=24h" 2>/dev/null || true
+            docker builder prune -af 2>/dev/null || true
             echo "Deploy complete. Container status:"
             docker ps --filter name=openclaw
+            echo "Disk usage:"
+            df -h / | tail -1

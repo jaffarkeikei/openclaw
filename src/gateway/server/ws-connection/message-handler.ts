@@ -526,11 +526,15 @@ export function attachGatewayWsMessageHandler(params: {
             hasSharedAuth,
             isLocalClient,
           });
-          // Shared token/password auth can bypass pairing for trusted operators, but
-          // device-less backend clients must not self-declare scopes. Control UI
-          // keeps its explicitly allowed device-less scopes on the allow path.
+          // Device-less clients cannot self-declare scopes unless they proved
+          // identity through shared token/password auth as an operator, or they
+          // are the Control UI on the allow path.
           if (!device && (!isControlUi || decision.kind !== "allow")) {
-            clearUnboundScopes();
+            // Token/password-authenticated operators retain their requested scopes.
+            // The shared secret is proof of authorization for backend integrations.
+            if (!(role === "operator" && sharedAuthOk)) {
+              clearUnboundScopes();
+            }
           }
           if (decision.kind === "allow") {
             return true;
