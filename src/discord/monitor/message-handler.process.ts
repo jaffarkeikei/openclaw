@@ -142,9 +142,14 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   const messageForwardUrl = discordConfig?.messageForwardUrl?.trim();
   if (messageForwardUrl && isDirectMessage) {
     try {
+      // Show "typing..." indicator while the external handler processes the message
+      sendTyping({ client, channelId: messageChannelId }).catch(() => {});
+
       const forwardSecret = discordConfig?.messageForwardSecret?.trim() ?? null;
       const reqHeaders: Record<string, string> = { "Content-Type": "application/json" };
-      if (forwardSecret) reqHeaders["x-forward-secret"] = forwardSecret;
+      if (forwardSecret) {
+        reqHeaders["x-forward-secret"] = forwardSecret;
+      }
 
       const forwardRes = await fetch(messageForwardUrl, {
         method: "POST",

@@ -90,9 +90,14 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
           : "";
       if (text) {
         try {
+          // Show "typing..." indicator while the external handler processes the message
+          sendChatActionHandler.sendChatAction(context.chatId, "typing").catch(() => {});
+
           const forwardSecret = telegramCfg.messageForwardSecret?.trim() ?? null;
           const reqHeaders: Record<string, string> = { "Content-Type": "application/json" };
-          if (forwardSecret) reqHeaders["x-forward-secret"] = forwardSecret;
+          if (forwardSecret) {
+            reqHeaders["x-forward-secret"] = forwardSecret;
+          }
 
           const forwardRes = await fetch(messageForwardUrl, {
             method: "POST",
@@ -117,7 +122,9 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
           await bot.api.sendMessage(
             context.chatId,
             forwardBody.reply,
-            context.threadSpec?.id != null ? { message_thread_id: context.threadSpec.id } : undefined,
+            context.threadSpec?.id != null
+              ? { message_thread_id: context.threadSpec.id }
+              : undefined,
           );
         } catch (err) {
           runtime.error?.(danger(`telegram: message forward failed: ${String(err)}`));

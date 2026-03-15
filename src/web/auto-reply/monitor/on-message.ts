@@ -151,17 +151,33 @@ export function createWebOnMessageHandler(params: {
       // If messageForwardUrl is set, forward the DM to an external handler (e.g. Snowball) instead of
       // running the local agent. The handler receives the raw message and returns a reply.
       const whatsappCfg = params.cfg.channels?.whatsapp as
-        | { messageForwardUrl?: string; messageForwardSecret?: string; accounts?: Record<string, { messageForwardUrl?: string; messageForwardSecret?: string }> }
+        | {
+            messageForwardUrl?: string;
+            messageForwardSecret?: string;
+            accounts?: Record<
+              string,
+              { messageForwardUrl?: string; messageForwardSecret?: string }
+            >;
+          }
         | undefined;
       const accountCfg = msg.accountId ? whatsappCfg?.accounts?.[msg.accountId] : undefined;
-      const messageForwardUrl = (accountCfg?.messageForwardUrl ?? whatsappCfg?.messageForwardUrl)?.trim();
+      const messageForwardUrl = (
+        accountCfg?.messageForwardUrl ?? whatsappCfg?.messageForwardUrl
+      )?.trim();
       if (messageForwardUrl) {
         const text = (msg.body ?? "").trim();
         if (text) {
           try {
-            const messageForwardSecret = (accountCfg?.messageForwardSecret ?? whatsappCfg?.messageForwardSecret)?.trim() ?? null;
+            // Show "typing..." indicator while the external handler processes the message
+            msg.sendComposing().catch(() => {});
+
+            const messageForwardSecret =
+              (accountCfg?.messageForwardSecret ?? whatsappCfg?.messageForwardSecret)?.trim() ??
+              null;
             const reqHeaders: Record<string, string> = { "Content-Type": "application/json" };
-            if (messageForwardSecret) reqHeaders["x-forward-secret"] = messageForwardSecret;
+            if (messageForwardSecret) {
+              reqHeaders["x-forward-secret"] = messageForwardSecret;
+            }
 
             const channelUserId = msg.senderE164 ?? msg.from;
             const forwardRes = await fetch(messageForwardUrl, {
