@@ -259,7 +259,7 @@ export async function deliverDiscordReply(params: {
   const replyOnce = replyToMode === "first";
   let replyUsed = false;
   const resolveReplyTo = () => {
-    if (!replyTo) {
+    if (!replyTo || replyToMode === "off") {
       return undefined;
     }
     if (!replyOnce) {
