@@ -54,6 +54,7 @@ import {
 } from "./hooks.js";
 import { sendGatewayAuthFailure, setDefaultSecurityHeaders } from "./http-common.js";
 import { getBearerToken } from "./http-utils.js";
+import { handleMessagesSendHttpRequest } from "./messages-http.js";
 import { resolveRequestClientIp } from "./net.js";
 import { handleOpenAiHttpRequest } from "./openai-http.js";
 import { handleOpenResponsesHttpRequest } from "./openresponses-http.js";
@@ -794,6 +795,16 @@ export function createGatewayHttpServer(opts: {
           name: "tools-invoke",
           run: () =>
             handleToolsInvokeHttpRequest(req, res, {
+              auth: resolvedAuth,
+              trustedProxies,
+              allowRealIpFallback,
+              rateLimiter,
+            }),
+        },
+        {
+          name: "messages-send",
+          run: () =>
+            handleMessagesSendHttpRequest(req, res, {
               auth: resolvedAuth,
               trustedProxies,
               allowRealIpFallback,
