@@ -1,0 +1,41 @@
+name: Sync Fork with Upstream
+
+on:
+  schedule:
+    # Run daily at 04:00 UTC (before the Snowball pin-bump at 04:47)
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync fork with upstream
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data } = await github.rest.repos.mergeUpstream({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                branch: 'main',
+              });
+              console.log(`Sync result: ${data.message}`);
+              if (data.merge_type) {
+                console.log(`Merge type: ${data.merge_type}`);
+              }
+            } catch (error) {
+              if (error.status === 409) {
+                core.warning(
+                  'Fork has diverged from upstream and cannot be auto-merged. ' +
+                  'Manual conflict resolution required. Run:\n' +
+                  '  cd openclaw && git fetch upstream && git merge upstream/main\n' +
+                  '  # resolve conflicts, then push'
+                );
+              } else {
+                throw error;
+              }
+            }
