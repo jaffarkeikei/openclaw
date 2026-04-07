@@ -53,9 +53,12 @@ jobs:
 
       - name: Sync fork with upstream
         if: steps.check.outputs.should_sync == 'true'
+        env:
+          UPSTREAM_TAG: ${{ steps.check.outputs.tag }}
         uses: actions/github-script@v7
         with:
           script: |
+            const tag = process.env.UPSTREAM_TAG;
             try {
               const { data } = await github.rest.repos.mergeUpstream({
                 owner: context.repo.owner,
@@ -69,7 +72,7 @@ jobs:
             } catch (error) {
               if (error.status === 409) {
                 core.warning(
-                  `Fork has diverged from upstream and cannot be auto-merged for ${steps.check.outputs.tag}. ` +
+                  `Fork has diverged from upstream and cannot be auto-merged for ${tag}. ` +
                   'Manual conflict resolution required:\n' +
                   '  cd openclaw && git fetch upstream && git merge upstream/main'
                 );
