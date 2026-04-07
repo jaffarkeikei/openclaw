@@ -1,7 +1,9 @@
 name: Sync Fork on Upstream Release
 
 on:
-  # Manual trigger only — run when you see a new upstream release
+  schedule:
+    # Check once daily at 04:00 UTC — only syncs when a new upstream release exists
+    - cron: "0 4 * * *"
   workflow_dispatch:
 
 permissions:
